@@ -1,0 +1,8 @@
+[workspace]
+members = [
+  "traf_core",
+  "traf_lib",
+  "traf_client",
+  "traf_cli",
+  "traf_benchmark",
+]
