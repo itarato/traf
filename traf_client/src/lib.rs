@@ -129,7 +129,6 @@ impl Client {
       .ok_or(io::Error::new(io::ErrorKind::InvalidData, "unexpected end"))?;
     info!("{} bytes received", msg_in.bytes.len());
 
-    // FIXME: We hard remove the first size-marker. This should be checked here properly.
     Ok(msg_in.bytes)
   }
 }

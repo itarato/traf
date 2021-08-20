@@ -6,7 +6,6 @@ use traf_client::*;
 async fn test_basic_set_get_delete_flow() {
   let mut client = Client::connect("127.0.0.1:4567").await.unwrap();
   let set_result = client.set("foo", 123i32).await;
-  dbg!(&set_result);
 
   assert!(set_result.is_ok());
 
