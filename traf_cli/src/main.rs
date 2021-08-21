@@ -1,40 +1,55 @@
-use tokio::net::{TcpStream};
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-
+use std::convert::TryFrom;
 use std::io::{stdin, stdout};
+use tokio::io;
+use tokio::net::TcpStream;
+use traf_lib::frame_reader::FramedTcpStream;
+use traf_lib::response_frame::ResponseFrame;
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> io::Result<()> {
     pretty_env_logger::init();
 
     let in_stream = stdin();
-    let mut stream = TcpStream::connect("127.0.0.1:4567").await.expect("Cannot connect to stream.");
+    let stream = TcpStream::connect("127.0.0.1:4567").await?;
+    let mut framed_stream = FramedTcpStream::new(stream);
 
     loop {
         let mut stdin_buf = String::new();
 
         print!("traf> ");
         std::io::Write::flush(&mut stdout()).expect("Cannot flush to out");
-        
-        in_stream.read_line(&mut stdin_buf).expect("Failed reading from input stream");
 
+        in_stream
+            .read_line(&mut stdin_buf)
+            .expect("Failed reading from input stream");
         let input = stdin_buf.trim();
 
         match input {
             "q" => break,
             _ => {
-                stream.write(&[input.len() as u8]).await.expect("Cannot write to stream");
-                stream.write(input.as_bytes()).await.expect("cannot write to stream");
-
+                framed_stream.write_frame(input.as_bytes().to_vec()).await?;
                 info!("data sent");
 
-                let mut buf_in: [u8; 256] = [0; 256];
-                let buf_in_len = stream.read(&mut buf_in).await.expect("Cannot read server response");
+                let bytes_in = framed_stream
+                    .read_frame()
+                    .await
+                    .expect("Cannot read response");
 
-                info!("data received data:{:?}", &buf_in[..buf_in_len]);
-            },
+                match ResponseFrame::try_from(bytes_in.bytes) {
+                    Ok(response_frame) => match response_frame {
+                        ResponseFrame::Success => println!("[success]"),
+                        ResponseFrame::ErrorInvalidCommand => println!("[invalid command]"),
+                        ResponseFrame::ValueMissing => println!("[value missing]"),
+                        ResponseFrame::Value(v) => println!("{:?}", v),
+                    },
+                    Err(_) => break,
+                }
+            }
         };
     }
+
+    Ok(())
 }
