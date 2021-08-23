@@ -1,9 +1,12 @@
 use super::interpreter::Command;
+use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 struct Changeset {
@@ -32,6 +35,10 @@ impl BackupKeyInfo {
       pos,
     }
   }
+
+  fn value_range(&self) -> Range<usize> {
+    self.pos..(self.pos + self.content_size)
+  }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -49,8 +56,6 @@ impl FileBackup {
       dir,
     }
   }
-
-  pub fn start(&self) {}
 
   pub fn log(&mut self, cmd: &Command) {
     match cmd {
@@ -71,33 +76,22 @@ impl FileBackup {
     self.backup();
   }
 
-  pub fn backup(&mut self) {
-    let mut registered_backup_keys: BackupKeys;
-    {
-      let key_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(self.key_file_path())
-        .expect("Cannot open key file for read");
-      registered_backup_keys = serde_json::from_reader(key_file).unwrap_or(BackupKeys::default());
-    }
+  pub fn restore(&self, storage: Arc<Mutex<Storage>>) {
+    let registered_backup_keys = self.fetch_backup_keys();
+    let value_file_content: Vec<u8> = self.fetch_backup_values();
 
-    let mut value_file_content: Vec<u8> = vec![];
-    {
-      let mut value_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(self.value_file_path())
-        .expect("Cannot open value file for read");
+    let mut storage = storage.lock().expect("Cannot gain lock to storage");
 
-      value_file
-        .read_to_end(&mut value_file_content)
-        .expect("Cannot read value file");
+    for (key, info) in &registered_backup_keys.0 {
+      let value_range = info.value_range();
+      let value = &value_file_content[value_range];
+      storage.set(key.clone(), value.to_vec());
     }
+  }
+
+  fn backup(&mut self) {
+    let mut registered_backup_keys = self.fetch_backup_keys();
+    let mut value_file_content: Vec<u8> = self.fetch_backup_values();
 
     // Remove all removals;
     for key_to_remove in &self.changeset.removals {
@@ -171,5 +165,34 @@ impl FileBackup {
 
   fn value_file_path(&self) -> PathBuf {
     Path::new(&self.dir).join("__traf_values.db")
+  }
+
+  fn fetch_backup_keys(&self) -> BackupKeys {
+    let key_file = OpenOptions::new()
+      .read(true)
+      .write(true)
+      .create(true)
+      .truncate(false)
+      .open(self.key_file_path())
+      .expect("Cannot open key file for read");
+    serde_json::from_reader(key_file).unwrap_or(BackupKeys::default())
+  }
+
+  fn fetch_backup_values(&self) -> Vec<u8> {
+    let mut value_file_content: Vec<u8> = vec![];
+
+    let mut value_file = OpenOptions::new()
+      .read(true)
+      .write(true)
+      .create(true)
+      .truncate(false)
+      .open(self.value_file_path())
+      .expect("Cannot open value file for read");
+
+    value_file
+      .read_to_end(&mut value_file_content)
+      .expect("Cannot read value file");
+
+    value_file_content
   }
 }

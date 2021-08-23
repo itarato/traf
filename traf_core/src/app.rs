@@ -20,7 +20,7 @@ impl App {
     let storage = Arc::new(Mutex::new(Storage::new()));
     let backup = FileBackup::new("/tmp".into());
 
-    backup.start();
+    backup.restore(storage.clone());
 
     App {
       interpreter: Interpreter::new(),
