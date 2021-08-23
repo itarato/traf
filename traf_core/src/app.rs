@@ -1,6 +1,8 @@
+use super::file_backup::FileBackup;
 use super::interpreter::*;
 use super::storage::*;
 use super::FrameAndChannel;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
 use traf_lib::response_frame::ResponseFrame;
 
@@ -8,16 +10,23 @@ use traf_lib::response_frame::ResponseFrame;
 
 pub struct App {
   interpreter: Interpreter,
-  storage: Storage,
+  storage: Arc<Mutex<Storage>>,
   rx: Receiver<FrameAndChannel>,
+  backup: FileBackup,
 }
 
 impl App {
   pub fn new(rx: Receiver<FrameAndChannel>) -> Self {
+    let storage = Arc::new(Mutex::new(Storage::new()));
+    let backup = FileBackup::new("/tmp".into());
+
+    backup.start();
+
     App {
       interpreter: Interpreter::new(),
-      storage: Storage::new(),
+      storage: storage.clone(),
       rx,
+      backup,
     }
   }
 
@@ -40,22 +49,25 @@ impl App {
 
   fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
     let cmd = self.interpreter.read(input);
+
+    self.backup.log(&cmd);
+
     match cmd {
       Command::Set { key, value } => {
         info!("SET {:?} {:?}", key, value);
-        self.storage.set(key, value);
+        self.storage.lock().unwrap().set(key, value);
         ResponseFrame::Success
       }
       Command::Get { key } => {
         info!("GET {:?}", key);
-        match self.storage.get(key) {
+        match self.storage.lock().unwrap().get(key) {
           Some(v) => ResponseFrame::Value(v.clone()),
           None => ResponseFrame::ValueMissing,
         }
       }
       Command::Delete { key } => {
         info!("DELETE {:?}", key);
-        if self.storage.delete(key) {
+        if self.storage.lock().unwrap().delete(key) {
           ResponseFrame::Success
         } else {
           ResponseFrame::ValueMissing

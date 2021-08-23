@@ -40,6 +40,7 @@ impl Interpreter {
   }
 }
 
+#[derive(Clone)]
 pub enum Command {
   Set { key: String, value: Vec<u8> },
   Get { key: String },

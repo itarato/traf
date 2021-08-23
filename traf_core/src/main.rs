@@ -10,6 +10,7 @@ use traf_lib::frame_reader::{Frame, FramedTcpStream};
 extern crate log;
 
 mod app;
+mod file_backup;
 mod interpreter;
 mod storage;
 
