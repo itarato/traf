@@ -8,6 +8,15 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+// IDEA: Sharding:
+//        - eg when the values file reaches a certain size: half it
+//        - what if an update adds more than 2,3,.. size of max shard size?
+//        - should it be alphabet? hash?
+
+// IDEA: What is the good frequency/schedule to write backup
+//        - maybe every 100 log?
+//        - maybe some time based?
+
 #[derive(Default)]
 struct Changeset {
   updates: HashMap<String, Vec<u8>>,
@@ -131,31 +140,10 @@ impl FileBackup {
       }
     }
 
-    // Save keys.
-    let mut key_file = OpenOptions::new()
-      .read(false)
-      .write(true)
-      .create(false)
-      .truncate(true)
-      .open(self.key_file_path())
-      .expect("Cannot open key file for write");
-    let key_blob = serde_json::to_string(&registered_backup_keys).expect("Cannot serialize keys");
-    key_file
-      .write_all(key_blob.as_bytes())
-      .expect("Cannot write keys");
+    self.save_backup_keys(registered_backup_keys);
+    self.save_backup_values(value_file_content);
 
-    // Save values.
-    let mut value_file = OpenOptions::new()
-      .read(false)
-      .write(true)
-      .create(false)
-      .truncate(true)
-      .open(self.value_file_path())
-      .expect("Cannot open key file for write");
-    value_file
-      .write_all(&value_file_content[..])
-      .expect("Cannot write values");
-
+    // Reset changelog.
     self.changeset = Changeset::new();
   }
 
@@ -166,6 +154,8 @@ impl FileBackup {
   fn value_file_path(&self) -> PathBuf {
     Path::new(&self.dir).join("__traf_values.db")
   }
+
+  // IDEA: File ops could be tokio::fs.
 
   fn fetch_backup_keys(&self) -> BackupKeys {
     let key_file = OpenOptions::new()
@@ -194,5 +184,32 @@ impl FileBackup {
       .expect("Cannot read value file");
 
     value_file_content
+  }
+
+  fn save_backup_keys(&self, keys: BackupKeys) {
+    let mut key_file = OpenOptions::new()
+      .read(false)
+      .write(true)
+      .create(false)
+      .truncate(true)
+      .open(self.key_file_path())
+      .expect("Cannot open key file for write");
+    let key_blob = serde_json::to_string(&keys).expect("Cannot serialize keys");
+    key_file
+      .write_all(key_blob.as_bytes())
+      .expect("Cannot write keys");
+  }
+
+  fn save_backup_values(&self, values: Vec<u8>) {
+    let mut value_file = OpenOptions::new()
+      .read(false)
+      .write(true)
+      .create(false)
+      .truncate(true)
+      .open(self.value_file_path())
+      .expect("Cannot open key file for write");
+    value_file
+      .write_all(&values[..])
+      .expect("Cannot write values");
   }
 }
