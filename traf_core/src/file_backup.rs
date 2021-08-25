@@ -123,6 +123,8 @@ impl FileBackup {
     }
   }
 
+  // FIXME: probably we need a module level lock - for log/restore/backup/shard
+
   pub fn log(&mut self, cmd: &Command) {
     match cmd {
       Command::Delete { key } => {
@@ -225,6 +227,8 @@ impl FileBackup {
     // Reset changelog.
     self.changesets = ChangesetCollection::default();
   }
+
+  fn shard(&mut self) {}
 
   fn key_file_path(&self, filehash: &str) -> PathBuf {
     let mut filename = String::new();
