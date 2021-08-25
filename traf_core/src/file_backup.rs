@@ -1,5 +1,6 @@
 use super::interpreter::Command;
 use crate::storage::Storage;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -18,6 +19,16 @@ use std::sync::{Arc, Mutex};
 // IDEA: What is the good frequency/schedule to write backup
 //        - maybe every 100 log?
 //        - maybe some time based?
+
+fn generate_random_name() -> String {
+  let mut rng = rand::thread_rng();
+  let mut bytes: Vec<u8> = vec![];
+  for _ in 0..16 {
+    let byte: u8 = rng.gen_range(b'a'..b'z');
+    bytes.push(byte);
+  }
+  String::from_utf8(bytes).expect("Failed random string generation")
+}
 
 #[derive(Default)]
 struct Changeset {
@@ -58,12 +69,29 @@ struct ShardFileInfo {
   mod_value: u64,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+impl ShardFileInfo {
+  fn new(mod_base: u64, mod_value: u64) -> Self {
+    Self {
+      mod_base,
+      mod_value,
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize)]
 struct ShardRegistry {
   files: HashMap<String, ShardFileInfo>,
 }
 
 impl ShardRegistry {
+  fn new() -> Self {
+    let mut files = HashMap::new();
+    let fileinfo = ShardFileInfo::new(1, 0);
+    files.insert(generate_random_name(), fileinfo);
+
+    ShardRegistry { files }
+  }
+
   fn filehash_for_key(&self, key: &String) -> String {
     let mut hasher = DefaultHasher::new();
     hasher.write(key.as_bytes());
@@ -192,6 +220,8 @@ impl FileBackup {
       self.save_backup_values(filehash, value_file_content);
     });
 
+    self.save_shard_registry();
+
     // Reset changelog.
     self.changesets = ChangesetCollection::default();
   }
@@ -228,7 +258,7 @@ impl FileBackup {
       .truncate(false)
       .open(FileBackup::shard_registry_file_path(dir))
       .expect("Cannot open shard registry file for read");
-    serde_json::from_reader(shard_registry_file).unwrap_or(ShardRegistry::default())
+    serde_json::from_reader(shard_registry_file).unwrap_or(ShardRegistry::new())
   }
 
   fn fetch_backup_keys(&self, filehash: &str) -> BackupKeys {
@@ -285,5 +315,20 @@ impl FileBackup {
     value_file
       .write_all(&values[..])
       .expect("Cannot write values");
+  }
+
+  fn save_shard_registry(&self) {
+    let mut shard_registry_file = OpenOptions::new()
+      .read(false)
+      .write(true)
+      .create(false)
+      .truncate(true)
+      .open(Self::shard_registry_file_path(&self.dir))
+      .expect("Cannot open shard registry file for write");
+    let blob =
+      serde_json::to_string(&self.shard_registry).expect("Cannot serialize shard registry");
+    shard_registry_file
+      .write_all(blob.as_bytes())
+      .expect("Cannot write shard registry");
   }
 }
