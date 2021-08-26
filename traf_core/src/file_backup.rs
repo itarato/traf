@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 // IDEA: The current concept splits a shard on a size limit. This is a problem when a single item
 //        can allocate a lot of space -> may result in a forever split.
 
+const SHARD_BREAK_LIMIT: usize = 1024;
+
 fn generate_random_name() -> String {
   let mut rng = rand::thread_rng();
   let mut bytes: Vec<u8> = vec![];
@@ -216,10 +218,7 @@ impl FileBackup {
 
       // Remove all removals;
       for key_to_remove in &changeset.removals {
-        registered_backup_keys
-          .0
-          .remove(key_to_remove)
-          .expect("Cannot remove key");
+        registered_backup_keys.0.remove(key_to_remove);
       }
 
       // Update all updates.
@@ -388,7 +387,7 @@ impl FileBackup {
       .expect("Cannot open shard registry file for read");
 
     // FIXME: do not hardcode shard break limit.
-    serde_json::from_reader(shard_registry_file).unwrap_or(ShardRegistry::new(1 << 5))
+    serde_json::from_reader(shard_registry_file).unwrap_or(ShardRegistry::new(SHARD_BREAK_LIMIT))
   }
 
   fn fetch_backup_keys(&self, filehash: &str) -> BackupKeys {
