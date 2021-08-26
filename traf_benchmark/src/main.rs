@@ -1,8 +1,8 @@
-use tokio::net::{TcpStream};
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
-use clap::{Arg, App};
+use clap::{App, Arg};
+use traf_client::Client;
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 #[tokio::main]
 async fn main() {
@@ -13,13 +13,13 @@ async fn main() {
             Arg::with_name("iteration")
                 .short("i")
                 .takes_value(true)
-                .default_value("1")
+                .default_value("1"),
         )
         .arg(
             Arg::with_name("concurrency")
                 .short("c")
                 .takes_value(true)
-                .default_value("1")
+                .default_value("1"),
         )
         .get_matches();
 
@@ -36,19 +36,23 @@ async fn main() {
 
     for c in 0..concurrency {
         let join_handle = tokio::spawn(async move {
-            let mut stream = TcpStream::connect("127.0.0.1:4567").await.expect("Cannot connect to stream.");
+            let mut client = Client::connect("127.0.0.1:4567")
+                .await
+                .expect("Failed creating a client");
 
             for i in 0..iteration {
-                let msg = b"SET foo 123";
-                stream.write(&[msg.len() as u8]).await.expect("Cannot write to stream");
-                stream.write(msg).await.expect("cannot write to stream");
-
+                client.set("foo", 123u8).await.expect("Cannot set value");
                 info!("data sent c:{} i:{}", c, i);
 
-                let mut buf_in: [u8; 256] = [0; 256];
-                let buf_in_len = stream.read(&mut buf_in).await.expect("Cannot read server response");
-
-                info!("data received c:{} i:{} data:{:?}", c, i, &buf_in[..buf_in_len]);
+                let get_result = client.get("foo").await.expect("Cannot get value");
+                info!(
+                    "data received c:{} i:{} data:{:?}",
+                    c,
+                    i,
+                    get_result
+                        .try_decode::<u8>()
+                        .expect("Cannot decode response")
+                );
             }
         });
         join_handles.push(join_handle);

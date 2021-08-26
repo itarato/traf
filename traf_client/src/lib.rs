@@ -35,6 +35,7 @@ impl TryFrom<Vec<u8>> for ResponseFrame {
   }
 }
 
+#[derive(Debug)]
 pub struct Get {
   bytes: Vec<u8>,
 }
