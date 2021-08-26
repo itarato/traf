@@ -43,7 +43,12 @@ async fn main() -> io::Result<()> {
                         ResponseFrame::Success => println!("[success]"),
                         ResponseFrame::ErrorInvalidCommand => println!("[invalid command]"),
                         ResponseFrame::ValueMissing => println!("[value missing]"),
-                        ResponseFrame::Value(v) => println!("{:?}", v),
+                        ResponseFrame::Value(v) => {
+                            match String::from_utf8(v.clone()) {
+                                Ok(s) => println!("{:?}", s),
+                                Err(_) => println!("{:?}", v),
+                            };
+                        }
                     },
                     Err(_) => break,
                 }
