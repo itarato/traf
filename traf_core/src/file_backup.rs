@@ -179,9 +179,6 @@ impl FileBackup {
     change_count >= CHANGELOG_TRESHOLD_TO_INIT_BACKUP
   }
 
-  // IDEA: drop is not running on process kill and we don't have a nice quit strategy yet.
-  //        think about making change tracking safer (by not doing in memory for that too).
-
   pub fn log(&mut self, cmd: &Command) {
     {
       let _op_guard = self.op_mutex.lock().expect("Cannot gain lock");
@@ -217,6 +214,11 @@ impl FileBackup {
     if self.should_backup() {
       self.backup();
       self.shard();
+    } else {
+      // IDEA: drop is not running on process kill and we don't have a nice quit strategy yet.
+      //        think about making change tracking safer (by not doing in memory for that too).
+      //        Here we could just do an append-only write-out of changelog events - and drain
+      //        on boot.
     }
   }
 
