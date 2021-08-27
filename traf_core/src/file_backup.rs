@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 //        can allocate a lot of space -> may result in a forever split.
 
 const SHARD_BREAK_LIMIT: usize = 1024;
+const CHANGELOG_TRESHOLD_TO_INIT_BACKUP: usize = 64;
 
 fn generate_random_name() -> String {
   let mut rng = rand::thread_rng();
@@ -145,6 +146,12 @@ pub struct FileBackup {
   op_mutex: Mutex<()>,
 }
 
+impl Drop for FileBackup {
+  fn drop(&mut self) {
+    self.backup();
+  }
+}
+
 impl FileBackup {
   pub fn new(dir: String) -> Self {
     let shard_registry = Self::fetch_shard_registry(&dir);
@@ -162,7 +169,18 @@ impl FileBackup {
     instance
   }
 
-  // FIXME: probably we need a module level lock - for log/restore/backup/shard
+  fn should_backup(&self) -> bool {
+    let change_count: usize = self
+      .changesets
+      .0
+      .values()
+      .map(|changeset| changeset.updates.len() + changeset.removals.len())
+      .sum();
+    change_count >= CHANGELOG_TRESHOLD_TO_INIT_BACKUP
+  }
+
+  // IDEA: drop is not running on process kill and we don't have a nice quit strategy yet.
+  //        think about making change tracking safer (by not doing in memory for that too).
 
   pub fn log(&mut self, cmd: &Command) {
     {
@@ -196,8 +214,10 @@ impl FileBackup {
     }
 
     // FIXME: this is temporary, should be called moderately.
-    self.backup();
-    self.shard();
+    if self.should_backup() {
+      self.backup();
+      self.shard();
+    }
   }
 
   pub fn restore(&self, storage: Arc<Mutex<Storage>>) {
