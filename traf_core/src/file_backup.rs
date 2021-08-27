@@ -142,6 +142,7 @@ pub struct FileBackup {
   changesets: ChangesetCollection,
   dir: String,
   shard_registry: ShardRegistry,
+  op_mutex: Mutex<()>,
 }
 
 impl FileBackup {
@@ -152,6 +153,7 @@ impl FileBackup {
       changesets: ChangesetCollection::default(),
       dir,
       shard_registry,
+      op_mutex: Mutex::new(()),
     };
 
     // IDEA: have a dirty indicator, so only save when needed.
@@ -163,31 +165,35 @@ impl FileBackup {
   // FIXME: probably we need a module level lock - for log/restore/backup/shard
 
   pub fn log(&mut self, cmd: &Command) {
-    match cmd {
-      Command::Delete { key } => {
-        let filehash = self.shard_registry.filehash_for_key(key);
-        let changeset = self
-          .changesets
-          .0
-          .entry(filehash)
-          .or_insert(Changeset::default());
+    {
+      let _op_guard = self.op_mutex.lock().expect("Cannot gain lock");
 
-        changeset.removals.insert(key.clone());
-        // It's fine if it's not in changeset updates, this is for just in case.
-        changeset.updates.remove(key.as_str());
-      }
-      Command::Set { key, value } => {
-        let filehash = self.shard_registry.filehash_for_key(key);
-        let changeset = self
-          .changesets
-          .0
-          .entry(filehash)
-          .or_insert(Changeset::default());
+      match cmd {
+        Command::Delete { key } => {
+          let filehash = self.shard_registry.filehash_for_key(key);
+          let changeset = self
+            .changesets
+            .0
+            .entry(filehash)
+            .or_insert(Changeset::default());
 
-        changeset.updates.insert(key.clone(), value.clone());
-      }
-      _ => (),
-    };
+          changeset.removals.insert(key.clone());
+          // It's fine if it's not in changeset updates, this is for just in case.
+          changeset.updates.remove(key.as_str());
+        }
+        Command::Set { key, value } => {
+          let filehash = self.shard_registry.filehash_for_key(key);
+          let changeset = self
+            .changesets
+            .0
+            .entry(filehash)
+            .or_insert(Changeset::default());
+
+          changeset.updates.insert(key.clone(), value.clone());
+        }
+        _ => (),
+      };
+    }
 
     // FIXME: this is temporary, should be called moderately.
     self.backup();
@@ -195,8 +201,9 @@ impl FileBackup {
   }
 
   pub fn restore(&self, storage: Arc<Mutex<Storage>>) {
-    let shard_registry = Self::fetch_shard_registry(&self.dir);
+    let _op_guard = self.op_mutex.lock().expect("Cannot gain lock");
 
+    let shard_registry = Self::fetch_shard_registry(&self.dir);
     let mut storage = storage.lock().expect("Cannot gain lock to storage");
 
     for (filehash, _) in &shard_registry.files {
@@ -212,6 +219,8 @@ impl FileBackup {
   }
 
   fn backup(&mut self) {
+    let _op_guard = self.op_mutex.lock().expect("Cannot gain lock");
+
     self.changesets.0.iter().for_each(|(filehash, changeset)| {
       let mut registered_backup_keys = self.fetch_backup_keys(filehash);
       let mut value_file_content: Vec<u8> = self.fetch_backup_values(filehash);
@@ -257,6 +266,8 @@ impl FileBackup {
   }
 
   fn shard(&mut self) {
+    let _op_guard = self.op_mutex.lock().expect("Cannot gain lock");
+
     let mut change_required: Vec<String> = vec![];
 
     self.shard_registry.files.keys().for_each(|filehash| {
