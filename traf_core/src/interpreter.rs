@@ -50,6 +50,26 @@ pub enum Command {
 
 impl Command {
   pub fn as_bytes(&self) -> Option<Vec<u8>> {
-    unimplemented!()
+    let mut bytes: Vec<u8> = vec![];
+
+    match self {
+      Command::Set { key, value } => {
+        bytes.append(&mut Vec::from(&b"SET "[..]));
+        bytes.append(&mut Vec::from(&key[..]));
+        bytes.push(b' ');
+        bytes.append(&mut value.clone());
+      }
+      Command::Delete { key } => {
+        bytes.append(&mut Vec::from(&b"DELETE "[..]));
+        bytes.append(&mut Vec::from(&key[..]));
+      }
+      Command::Get { key } => {
+        bytes.append(&mut Vec::from(&b"GET "[..]));
+        bytes.append(&mut Vec::from(&key[..]));
+      }
+      _ => return None,
+    }
+
+    Some(bytes)
   }
 }

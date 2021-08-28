@@ -1,6 +1,5 @@
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
-use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 use crate::interpreter::Command;
@@ -75,10 +74,4 @@ impl Replicator {
       .map(|metadata| Some(metadata.len()))
       .unwrap_or(None)
   }
-
-  // fn last_event_log_pointer(&self) -> Option<EventPtrT> {
-  //   fs::metadata(self.event_log_pointers_file_path())
-  //     .map(|metadata| Some(metadata.len() / size_of::<EventPtrT>() as EventPtrT))
-  //     .unwrap_or(None)
-  // }
 }
