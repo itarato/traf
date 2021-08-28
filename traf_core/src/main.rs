@@ -1,9 +1,10 @@
+use clap::{self, Arg};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot;
 
-use crate::app::App;
+use crate::app::{App, InstanceType};
 use traf_lib::frame_reader::{Frame, FramedTcpStream};
 
 #[macro_use]
@@ -34,9 +35,25 @@ async fn main() -> Result<(), String> {
 
     info!("traf core start");
 
+    let arg_matches = clap::App::new("Traf Core")
+        .arg(
+            Arg::with_name("type")
+                .short("t")
+                .value_name("TYPE")
+                .takes_value(true)
+                .default_value("reader"),
+        )
+        .get_matches();
+
+    let instance_type = match arg_matches.value_of("type") {
+        Some("writer") => InstanceType::Writer,
+        Some("reader") => InstanceType::Reader,
+        _ => panic!("instance type can be either reader or writer"),
+    };
+
     let listener = TcpListener::bind("127.0.0.1:4567").await.unwrap();
     let (tx, rx): (Sender<FrameAndChannel>, Receiver<FrameAndChannel>) = mpsc::channel(32);
-    let mut app: App = App::new(rx);
+    let mut app: App = App::new(instance_type, rx);
 
     let _app_join_handle = spawn(async move {
         app.listen().await;

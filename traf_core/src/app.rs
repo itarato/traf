@@ -8,15 +8,21 @@ use traf_lib::response_frame::ResponseFrame;
 
 // IDEA: Make storage permanent -> write to disk.
 
+pub enum InstanceType {
+  Reader,
+  Writer,
+}
+
 pub struct App {
   interpreter: Interpreter,
   storage: Arc<Mutex<Storage>>,
   rx: Receiver<FrameAndChannel>,
   backup: FileBackup,
+  instance_type: InstanceType,
 }
 
 impl App {
-  pub fn new(rx: Receiver<FrameAndChannel>) -> Self {
+  pub fn new(instance_type: InstanceType, rx: Receiver<FrameAndChannel>) -> Self {
     let storage = Arc::new(Mutex::new(Storage::new()));
     let backup = FileBackup::new("/tmp".into());
 
@@ -27,6 +33,7 @@ impl App {
       storage: storage.clone(),
       rx,
       backup,
+      instance_type,
     }
   }
 
@@ -54,9 +61,13 @@ impl App {
 
     match cmd {
       Command::Set { key, value } => {
-        info!("SET {:?} {:?}", key, value);
-        self.storage.lock().unwrap().set(key, value);
-        ResponseFrame::Success
+        if self.is_read_only() {
+          ResponseFrame::ErrorInvalidCommand
+        } else {
+          info!("SET {:?} {:?}", key, value);
+          self.storage.lock().unwrap().set(key, value);
+          ResponseFrame::Success
+        }
       }
       Command::Get { key } => {
         info!("GET {:?}", key);
@@ -66,14 +77,25 @@ impl App {
         }
       }
       Command::Delete { key } => {
-        info!("DELETE {:?}", key);
-        if self.storage.lock().unwrap().delete(key) {
-          ResponseFrame::Success
+        if self.is_read_only() {
+          ResponseFrame::ErrorInvalidCommand
         } else {
-          ResponseFrame::ValueMissing
+          info!("DELETE {:?}", key);
+          if self.storage.lock().unwrap().delete(key) {
+            ResponseFrame::Success
+          } else {
+            ResponseFrame::ValueMissing
+          }
         }
       }
       Command::Invalid => ResponseFrame::ErrorInvalidCommand,
+    }
+  }
+
+  fn is_read_only(&self) -> bool {
+    match self.instance_type {
+      InstanceType::Reader => true,
+      InstanceType::Writer => false,
     }
   }
 }
