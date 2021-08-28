@@ -1,48 +1,84 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::prelude::*;
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 use crate::interpreter::Command;
 
-// struct EventLogPointer {
-//   id: u64,
-//   pos: usize,
-// }
-
-// struct EventLogPointerList(Vec<EventLogPointer>);
+type EventPtrT = u64;
 
 pub struct Replicator {
   dir: String,
 }
 
 impl Replicator {
-  fn new(dir: String) -> Self {
+  pub fn new(dir: String) -> Self {
     Self { dir }
   }
 
-  fn log(&mut self, cmd: &Command) {
+  pub fn log(&mut self, cmd: &Command) {
     match cmd {
-      Command::Set { .. } => {
-        let bytes = cmd.as_bytes();
+      Command::Set { .. } | Command::Delete { .. } => {
+        let bytes = cmd.as_bytes().unwrap();
         let pos = self.event_log_file_size().unwrap_or(0);
+
+        self.append_event_log(bytes);
+        self.append_event_log_pointers(pos);
       }
-      Command::Delete { .. } => unimplemented!(),
       _ => (),
     };
   }
 
-  fn append_event_log(&self, bytes: Vec<u8>) {}
+  fn append_event_log(&self, bytes: Vec<u8>) {
+    let mut event_log_file = OpenOptions::new()
+      .read(false)
+      .write(true)
+      .create(true)
+      .truncate(false)
+      .append(true)
+      .open(self.event_log_file_path())
+      .expect("Cannot open event log file for write");
 
-  fn event_log_pointers_file_name(&self) -> PathBuf {
+    event_log_file
+      .write(&bytes.len().to_ne_bytes())
+      .expect("Cannot write event log size");
+    event_log_file
+      .write_all(&bytes[..])
+      .expect("Cannot write event log");
+  }
+
+  fn append_event_log_pointers(&self, pos: EventPtrT) {
+    let mut event_log_pointers_file = OpenOptions::new()
+      .read(false)
+      .write(true)
+      .create(true)
+      .truncate(false)
+      .append(true)
+      .open(self.event_log_pointers_file_path())
+      .expect("Cannot open event log file for write");
+
+    event_log_pointers_file
+      .write(&pos.to_ne_bytes())
+      .expect("Cannot write event log pointers");
+  }
+
+  fn event_log_pointers_file_path(&self) -> PathBuf {
     Path::new(&self.dir).join("__traf_replicator_event_log_pointers.db")
   }
 
-  fn event_log_file_name(&self) -> PathBuf {
+  fn event_log_file_path(&self) -> PathBuf {
     Path::new(&self.dir).join("__traf_replicator_event_log.db")
   }
 
-  fn event_log_file_size(&self) -> Option<u64> {
-    fs::metadata(self.event_log_file_name())
+  fn event_log_file_size(&self) -> Option<EventPtrT> {
+    fs::metadata(self.event_log_file_path())
       .map(|metadata| Some(metadata.len()))
       .unwrap_or(None)
   }
+
+  // fn last_event_log_pointer(&self) -> Option<EventPtrT> {
+  //   fs::metadata(self.event_log_pointers_file_path())
+  //     .map(|metadata| Some(metadata.len() / size_of::<EventPtrT>() as EventPtrT))
+  //     .unwrap_or(None)
+  // }
 }

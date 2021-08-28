@@ -1,12 +1,11 @@
-use super::file_backup::FileBackup;
-use super::interpreter::*;
-use super::storage::*;
-use super::FrameAndChannel;
+use crate::file_backup::FileBackup;
+use crate::interpreter::*;
+use crate::replicator::Replicator;
+use crate::storage::*;
+use crate::FrameAndChannel;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
 use traf_lib::response_frame::ResponseFrame;
-
-// IDEA: Make storage permanent -> write to disk.
 
 pub enum InstanceType {
   Reader,
@@ -19,6 +18,7 @@ pub struct App {
   rx: Receiver<FrameAndChannel>,
   backup: FileBackup,
   instance_type: InstanceType,
+  replicator: Replicator,
 }
 
 impl App {
@@ -34,6 +34,7 @@ impl App {
       rx,
       backup,
       instance_type,
+      replicator: Replicator::new("/tmp".into()),
     }
   }
 
@@ -58,6 +59,7 @@ impl App {
     let cmd = self.interpreter.read(input);
 
     self.backup.log(&cmd);
+    self.replicator.log(&cmd);
 
     match cmd {
       Command::Set { key, value } => {
