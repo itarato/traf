@@ -44,6 +44,13 @@ async fn main() -> Result<(), String> {
                 .takes_value(true)
                 .default_value("reader"),
         )
+        .arg(
+            Arg::with_name("last_reader_receiver_replica_id")
+                .short("last_replica_id")
+                .value_name("LAST_READER_RECEIVED_REPLICA_ID")
+                .takes_value(true)
+                .default_value(""),
+        )
         .get_matches();
 
     let instance_type = match arg_matches.value_of("type") {

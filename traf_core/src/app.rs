@@ -58,10 +58,9 @@ impl App {
   fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
     let cmd = self.interpreter.read(input);
 
-    self.backup.log(&cmd);
-    self.replicator.log(&cmd);
+    // FIXME: cloning a SET command with value can be expensive. Try to avoid it.
 
-    match cmd {
+    let result = match cmd.clone() {
       Command::Set { key, value } => {
         if self.is_read_only() {
           ResponseFrame::ErrorInvalidCommand
@@ -91,7 +90,22 @@ impl App {
         }
       }
       Command::Invalid => ResponseFrame::ErrorInvalidCommand,
-    }
+    };
+
+    match &result {
+      // Mutating operations have a result (for now) of ::Success - which is the only case
+      // we need replica/backup tracking.
+      &ResponseFrame::Success => {
+        self.backup.log(&cmd);
+
+        if !self.is_read_only() {
+          self.replicator.log(&cmd);
+        }
+      }
+      _ => (),
+    };
+
+    result
   }
 
   fn is_read_only(&self) -> bool {
