@@ -10,6 +10,8 @@ pub struct Replicator {
   dir: String,
 }
 
+// IDEA: the sync to readers probably better do batches to avoid always being networked.
+
 impl Replicator {
   pub fn new(dir: String) -> Self {
     Self { dir }
