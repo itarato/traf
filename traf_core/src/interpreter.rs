@@ -47,3 +47,9 @@ pub enum Command {
   Delete { key: String },
   Invalid,
 }
+
+impl Command {
+  pub fn as_bytes(&self) -> Option<Vec<u8>> {
+    unimplemented!()
+  }
+}

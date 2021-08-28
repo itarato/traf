@@ -13,6 +13,7 @@ extern crate log;
 mod app;
 mod file_backup;
 mod interpreter;
+mod replicator;
 mod storage;
 
 pub struct FrameAndChannel {
