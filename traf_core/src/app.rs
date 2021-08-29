@@ -19,10 +19,14 @@ pub struct App {
   backup: FileBackup,
   instance_type: InstanceType,
   replicator: Replicator,
+  last_replica_id: u64,
 }
 
+// IDEA: Something smells with the App being either writer or reader and some behaviour divides on this.
+//        Almost like it should be 2 types. Somehow this should be way safer.
+
 impl App {
-  pub fn new(instance_type: InstanceType, rx: Receiver<FrameAndChannel>) -> Self {
+  pub fn new(instance_type: InstanceType, last_replica_id: u64, rx: Receiver<FrameAndChannel>) -> Self {
     let storage = Arc::new(Mutex::new(Storage::new()));
     let backup = FileBackup::new("/tmp".into());
 
@@ -35,6 +39,7 @@ impl App {
       backup,
       instance_type,
       replicator: Replicator::new("/tmp".into()),
+      last_replica_id,
     }
   }
 
