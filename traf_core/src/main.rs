@@ -48,8 +48,7 @@ async fn main() -> Result<(), String> {
       Arg::with_name("last_reader_receiver_replica_id")
         .short("last_replica_id")
         .value_name("LAST_READER_RECEIVED_REPLICA_ID")
-        .takes_value(true)
-        .default_value(""),
+        .takes_value(true),
     )
     .get_matches();
 
@@ -59,13 +58,9 @@ async fn main() -> Result<(), String> {
     _ => panic!("instance type can be either reader or writer"),
   };
 
-  let last_replica_id: u64 = u64::from_str_radix(
-    arg_matches
-      .value_of("last_reader_receiver_replica_id")
-      .expect("Cannot obtain last replica id argument"),
-    10,
-  )
-  .unwrap();
+  let last_replica_id: Option<u64> = arg_matches
+    .value_of("last_reader_receiver_replica_id")
+    .map(|raw| u64::from_str_radix(raw, 10).expect("Invalid number format"));
 
   let listener = TcpListener::bind("127.0.0.1:4567").await.unwrap();
   let (tx, rx): (Sender<FrameAndChannel>, Receiver<FrameAndChannel>) = mpsc::channel(32);

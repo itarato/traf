@@ -19,14 +19,18 @@ pub struct App {
   backup: FileBackup,
   instance_type: InstanceType,
   replicator: Replicator,
-  last_replica_id: u64,
+  last_replica_id: Option<u64>,
 }
 
 // IDEA: Something smells with the App being either writer or reader and some behaviour divides on this.
 //        Almost like it should be 2 types. Somehow this should be way safer.
 
 impl App {
-  pub fn new(instance_type: InstanceType, last_replica_id: u64, rx: Receiver<FrameAndChannel>) -> Self {
+  pub fn new(
+    instance_type: InstanceType,
+    last_replica_id: Option<u64>,
+    rx: Receiver<FrameAndChannel>,
+  ) -> Self {
     let storage = Arc::new(Mutex::new(Storage::new()));
     let backup = FileBackup::new("/tmp".into());
 
@@ -94,6 +98,15 @@ impl App {
           }
         }
       }
+      Command::GetLastReplicationId => match self.instance_type {
+        // IDEA: For a reader not having a last replication id is valid - it might be the beginning.
+        //        Though it's also a weakness as we cannot really tell if that's legitimate or not.
+        InstanceType::Reader => match self.last_replica_id {
+          Some(id) => ResponseFrame::Value(Vec::from(id.to_be_bytes())),
+          None => ResponseFrame::ValueMissing,
+        },
+        InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
+      },
       Command::Invalid => ResponseFrame::ErrorInvalidCommand,
     };
 

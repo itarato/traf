@@ -41,7 +41,7 @@ impl Replicator {
       .expect("Cannot open event log file for write");
 
     event_log_file
-      .write(&bytes.len().to_ne_bytes())
+      .write(&bytes.len().to_be_bytes())
       .expect("Cannot write event log size");
     event_log_file
       .write_all(&bytes[..])
@@ -59,7 +59,7 @@ impl Replicator {
       .expect("Cannot open event log file for write");
 
     event_log_pointers_file
-      .write(&pos.to_ne_bytes())
+      .write(&pos.to_be_bytes())
       .expect("Cannot write event log pointers");
   }
 

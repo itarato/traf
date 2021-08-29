@@ -6,15 +6,15 @@ impl Interpreter {
   }
 
   pub fn read(&self, input: Vec<u8>) -> Command {
-    let after_cmd_space_pos = input.iter().position(|ch| ch == &b' ');
-    if after_cmd_space_pos.is_none() {
-      return Command::Invalid;
-    }
+    let after_cmd_space_pos = input
+      .iter()
+      .position(|ch| ch == &b' ')
+      .unwrap_or(input.len());
 
-    let (cmd, suffix_padded) = input.split_at(after_cmd_space_pos.unwrap());
-    let suffix = &suffix_padded[1..];
+    let (cmd, suffix_padded) = input.split_at(after_cmd_space_pos);
 
     if cmd == b"SET" {
+      let suffix = &suffix_padded[1..];
       let after_key_space_pos = suffix.iter().position(|ch| ch == &b' ');
       if after_key_space_pos.is_none() {
         return Command::Invalid;
@@ -27,13 +27,17 @@ impl Interpreter {
         value: value.into(),
       }
     } else if cmd == b"GET" {
+      let suffix = &suffix_padded[1..];
       Command::Get {
         key: String::from_utf8(suffix.into()).unwrap(),
       }
     } else if cmd == b"DELETE" {
+      let suffix = &suffix_padded[1..];
       Command::Delete {
         key: String::from_utf8(suffix.into()).unwrap(),
       }
+    } else if cmd == b"LAST_REPLICATION_ID" {
+      Command::GetLastReplicationId
     } else {
       Command::Invalid
     }
@@ -45,6 +49,7 @@ pub enum Command {
   Set { key: String, value: Vec<u8> },
   Get { key: String },
   Delete { key: String },
+  GetLastReplicationId,
   Invalid,
 }
 
