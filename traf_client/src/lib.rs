@@ -136,6 +136,23 @@ impl Client {
       })
   }
 
+  // FIXME: This is a bad pattern to expect a generic blob as batch command list. We should not expect
+  //        a client user to know how to craft it.
+  pub async fn batch_sync(&mut self, mut blob: Vec<u8>) -> Result<(), ClientError> {
+    let mut part_command: Vec<u8> = Vec::from(&b"SYNC "[..]);
+    part_command.append(&mut blob);
+
+    self
+      .send(part_command)
+      .await
+      .map_err(|e| ClientError::IoError(e))
+      .and_then(|bytes| ResponseFrame::try_from(bytes).map_err(|_| ClientError::DataError))
+      .and_then(|frame| match frame {
+        ResponseFrame::Success => Ok(()),
+        _ => Err(ClientError::DataError),
+      })
+  }
+
   async fn send(&mut self, msg: Vec<u8>) -> io::Result<Vec<u8>> {
     info!("{} bytes to send", msg.len());
     self.framed_stream.write_frame(msg).await?;

@@ -108,6 +108,11 @@ impl App {
         },
         InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
       },
+      Command::Sync { dump } => {
+        self.replicator.restore(self.storage.clone(), dump);
+        // FIXME: Do a proper result
+        ResponseFrame::Success
+      }
       Command::Invalid => ResponseFrame::ErrorInvalidCommand,
     };
 

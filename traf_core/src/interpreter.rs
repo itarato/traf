@@ -1,10 +1,12 @@
 pub struct Interpreter;
 
+// FIXME: This whole struct is useless. Just use Command.
 impl Interpreter {
   pub fn new() -> Self {
     Interpreter {}
   }
 
+  // FIXME: this fn looks like ::From<Vec<u8>>
   pub fn read(&self, input: Vec<u8>) -> Command {
     let after_cmd_space_pos = input
       .iter()
@@ -38,6 +40,11 @@ impl Interpreter {
       }
     } else if cmd == b"LAST_REPLICATION_ID" {
       Command::GetLastReplicationId
+    } else if cmd == b"SYNC" {
+      let suffix = &suffix_padded[1..];
+      Command::Sync {
+        dump: suffix.into(),
+      }
     } else {
       Command::Invalid
     }
@@ -51,9 +58,11 @@ pub enum Command {
   Delete { key: String },
   GetLastReplicationId,
   Invalid,
+  Sync { dump: Vec<u8> },
 }
 
 impl Command {
+  // FIXME: This looks like ::Into<Vec<u8>>
   pub fn as_bytes(&self) -> Option<Vec<u8>> {
     let mut bytes: Vec<u8> = vec![];
 
@@ -72,7 +81,7 @@ impl Command {
         bytes.append(&mut Vec::from(&b"GET "[..]));
         bytes.append(&mut Vec::from(&key[..]));
       }
-      _ => return None,
+      Command::Invalid | Command::GetLastReplicationId | Command::Sync { .. } => return None,
     }
 
     Some(bytes)
