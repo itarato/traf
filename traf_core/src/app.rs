@@ -52,7 +52,7 @@ impl App {
     info!("app start listening");
     while let Some(frame) = self.rx.recv().await {
       info!("app channel got message");
-      let res = self.execute(frame.frame.bytes);
+      let res = self.execute(frame.frame.bytes).await;
 
       frame
         .channel
@@ -65,7 +65,7 @@ impl App {
   // - inc int / dec int
   // - key defined?
 
-  fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
+  async fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
     let cmd = self.interpreter.read(input);
 
     // FIXME: cloning a SET command with value can be expensive. Try to avoid it.
@@ -118,7 +118,7 @@ impl App {
         self.backup.log(&cmd);
 
         if !self.is_read_only() {
-          self.replicator.log(&cmd);
+          self.replicator.log(&cmd).await;
         }
       }
       _ => (),

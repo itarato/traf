@@ -2,6 +2,9 @@ use std::convert::TryFrom;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use traf_client::Client;
+
+use tokio::spawn;
 
 use crate::interpreter::Command;
 
@@ -64,7 +67,7 @@ impl Replicator {
     Self { dir, readers }
   }
 
-  pub fn log(&mut self, cmd: &Command) {
+  pub async fn log(&mut self, cmd: &Command) {
     match cmd {
       Command::Set { .. } | Command::Delete { .. } => {
         let bytes = cmd.as_bytes().unwrap();
@@ -74,14 +77,14 @@ impl Replicator {
         self.append_event_log_pointers(pos);
 
         if self.should_sync() {
-          self.sync();
+          self.sync().await;
         }
       }
       _ => (),
     };
   }
 
-  fn sync(&self) {
+  async fn sync(&self) {
     /*
       collect all last ids from all readers
       send a big chunk payload to readers
@@ -91,7 +94,18 @@ impl Replicator {
       - arglist to accept reader
     */
 
-    for reader in &self.readers.0 {}
+    for reader in &self.readers.0 {
+      let addr = reader.addr.clone();
+      spawn(async move {
+        // FIXME: error handling
+        let mut client = Client::connect(addr)
+          .await
+          .expect("Failed connecting to reader");
+
+        let last_replication_id_result = client.last_replication_id().await;
+        dbg!(last_replication_id_result);
+      });
+    }
   }
 
   fn should_sync(&self) -> bool {

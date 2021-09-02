@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use bincode::{deserialize, serialize};
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use tokio::io::{self};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use traf_lib::frame_reader::{Frame, FramedTcpStream};
@@ -115,6 +116,22 @@ impl Client {
       .and_then(|frame| match frame {
         ResponseFrame::ValueMissing => Err(ClientError::Failure),
         ResponseFrame::Success => Ok(()),
+        _ => Err(ClientError::DataError),
+      })
+  }
+
+  pub async fn last_replication_id(&mut self) -> Result<Option<u64>, ClientError> {
+    self
+      .send(Vec::from(&b"LAST_REPLICATION_ID"[..]))
+      .await
+      .map_err(|e| ClientError::IoError(e))
+      .and_then(|bytes| ResponseFrame::try_from(bytes).map_err(|_| ClientError::DataError))
+      .and_then(|frame| match frame {
+        ResponseFrame::ValueMissing => Ok(None),
+        ResponseFrame::Value(bytes) => match bytes.try_into() {
+          Ok(partial_bytes) => Ok(Some(u64::from_be_bytes(partial_bytes))),
+          Err(_) => return Err(ClientError::DataError),
+        },
         _ => Err(ClientError::DataError),
       })
   }
