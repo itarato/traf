@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use clap::{self, Arg};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
@@ -5,6 +7,7 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot;
 
 use crate::app::{App, InstanceType};
+use crate::replicator::ReaderList;
 use traf_lib::frame_reader::{Frame, FramedTcpStream};
 
 #[macro_use]
@@ -38,6 +41,13 @@ async fn main() -> Result<(), String> {
 
   let arg_matches = clap::App::new("Traf Core")
     .arg(
+      Arg::with_name("address")
+        .short("a")
+        .value_name("ADDRESS")
+        .takes_value(true)
+        .default_value("0.0.0.0:4567"),
+    )
+    .arg(
       Arg::with_name("type")
         .short("t")
         .value_name("TYPE")
@@ -46,9 +56,16 @@ async fn main() -> Result<(), String> {
     )
     .arg(
       Arg::with_name("last_reader_receiver_replica_id")
-        .short("last_replica_id")
+        .short("l")
         .value_name("LAST_READER_RECEIVED_REPLICA_ID")
         .takes_value(true),
+    )
+    .arg(
+      Arg::with_name("readers")
+        .short("r")
+        .value_name("READERS")
+        .takes_value(true)
+        .default_value(""),
     )
     .get_matches();
 
@@ -62,9 +79,18 @@ async fn main() -> Result<(), String> {
     .value_of("last_reader_receiver_replica_id")
     .map(|raw| u64::from_str_radix(raw, 10).expect("Invalid number format"));
 
-  let listener = TcpListener::bind("127.0.0.1:4567").await.unwrap();
+  let readers_raw = arg_matches
+    .value_of("readers")
+    .expect("Cannot find readers input");
+
+  let readers = ReaderList::try_from(readers_raw)
+    .expect("Incorrect readers input. Expected: -r IP1:PORT1,IP2:PORT2...");
+
+  let address = arg_matches.value_of("address").unwrap();
+
+  let listener = TcpListener::bind(address).await.unwrap();
   let (tx, rx): (Sender<FrameAndChannel>, Receiver<FrameAndChannel>) = mpsc::channel(32);
-  let mut app: App = App::new(instance_type, last_replica_id, rx);
+  let mut app: App = App::new(instance_type, last_replica_id, readers, rx);
 
   let _app_join_handle = spawn(async move {
     app.listen().await;

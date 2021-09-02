@@ -36,7 +36,7 @@ async fn main() {
 
   for c in 0..concurrency {
     let join_handle = tokio::spawn(async move {
-      let mut client = Client::connect("127.0.0.1:4567")
+      let mut client = Client::connect("0.0.0.0:4567")
         .await
         .expect("Failed creating a client");
 

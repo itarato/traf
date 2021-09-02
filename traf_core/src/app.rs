@@ -1,6 +1,6 @@
 use crate::file_backup::FileBackup;
 use crate::interpreter::*;
-use crate::replicator::Replicator;
+use crate::replicator::{ReaderList, Replicator};
 use crate::storage::*;
 use crate::FrameAndChannel;
 use std::sync::{Arc, Mutex};
@@ -29,6 +29,7 @@ impl App {
   pub fn new(
     instance_type: InstanceType,
     last_replica_id: Option<u64>,
+    readers: ReaderList,
     rx: Receiver<FrameAndChannel>,
   ) -> Self {
     let storage = Arc::new(Mutex::new(Storage::new()));
@@ -42,7 +43,7 @@ impl App {
       rx,
       backup,
       instance_type,
-      replicator: Replicator::new("/tmp".into()),
+      replicator: Replicator::new("/tmp".into(), readers),
       last_replica_id,
     }
   }

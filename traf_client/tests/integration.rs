@@ -1,10 +1,10 @@
 use std::matches;
 use traf_client::*;
 
-// Requires TRAF-CORE running on 127.0.0.1:4567
+// Requires TRAF-CORE running on 0.0.0.0:4567
 #[tokio::test]
 async fn test_basic_set_get_delete_flow() {
-  let mut client = Client::connect("127.0.0.1:4567").await.unwrap();
+  let mut client = Client::connect("0.0.0.0:4567").await.unwrap();
   let set_result = client.set("foo", 123i32).await;
 
   assert!(set_result.is_ok());
@@ -33,7 +33,7 @@ async fn test_basic_set_get_delete_flow() {
 
 #[tokio::test]
 async fn test_missing_get_flow() {
-  let mut client = Client::connect("127.0.0.1:4567").await.unwrap();
+  let mut client = Client::connect("0.0.0.0:4567").await.unwrap();
   let get_result = client.get("nofoo").await;
 
   assert!(get_result.is_err());
