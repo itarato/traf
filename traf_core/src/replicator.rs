@@ -63,7 +63,6 @@ pub struct Replicator {
 
 impl Replicator {
   pub fn new(dir: String, readers: ReaderList) -> Self {
-    dbg!(&readers);
     Self { dir, readers }
   }
 
