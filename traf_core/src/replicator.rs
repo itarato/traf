@@ -178,8 +178,16 @@ impl Replicator {
     }
   }
 
-  pub fn restore(&self, storage: Arc<Mutex<Storage>>, dump: Vec<u8>) {
-    unimplemented!();
+  pub fn restore(&self, storage: Arc<Mutex<Storage>>, mut dump: Vec<u8>) {
+    match SyncChunkList::try_from(dump) {
+      Ok(list) => {
+        list.0.into_iter().for_each(|cmd| {
+          // FIXME: There should be something that makes the storage actions from a command.
+          unimplemented!();
+        });
+      }
+      Err(err) => error!("Failed decoding commands from chunk bytes"),
+    };
   }
 
   fn should_sync(&self) -> bool {
