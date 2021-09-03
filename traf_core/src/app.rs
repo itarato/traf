@@ -1,12 +1,13 @@
 use crate::file_backup::FileBackup;
-use crate::interpreter::*;
 use crate::replicator::{ReaderList, Replicator};
 use crate::storage::*;
 use crate::FrameAndChannel;
+use crate::{interpreter::*, Executor};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
 use traf_lib::response_frame::ResponseFrame;
 
+#[derive(PartialEq)]
 pub enum InstanceType {
   Reader,
   Writer,
@@ -32,7 +33,9 @@ impl App {
     readers: ReaderList,
     rx: Receiver<FrameAndChannel>,
   ) -> Self {
-    let storage = Arc::new(Mutex::new(Storage::new()));
+    let storage = Arc::new(Mutex::new(Storage::new(
+      instance_type == InstanceType::Reader,
+    )));
     let backup = FileBackup::new("/tmp".into());
 
     backup.restore(storage.clone());
@@ -66,38 +69,16 @@ impl App {
   // - key defined?
 
   async fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
-    let cmd = self.interpreter.read(input);
+    let ref cmd = self.interpreter.read(input);
 
     // FIXME: cloning a SET command with value can be expensive. Try to avoid it.
 
-    let result = match cmd.clone() {
-      Command::Set { key, value } => {
-        if self.is_read_only() {
-          ResponseFrame::ErrorInvalidCommand
-        } else {
-          info!("SET {:?} {:?}", key, value);
-          self.storage.lock().unwrap().set(key, value);
-          ResponseFrame::Success
-        }
-      }
-      Command::Get { key } => {
-        info!("GET {:?}", key);
-        match self.storage.lock().unwrap().get(key) {
-          Some(v) => ResponseFrame::Value(v.clone()),
-          None => ResponseFrame::ValueMissing,
-        }
-      }
-      Command::Delete { key } => {
-        if self.is_read_only() {
-          ResponseFrame::ErrorInvalidCommand
-        } else {
-          info!("DELETE {:?}", key);
-          if self.storage.lock().unwrap().delete(key) {
-            ResponseFrame::Success
-          } else {
-            ResponseFrame::ValueMissing
-          }
-        }
+    // IDEA: The Executor trait (used by Storage) doesn't seem too strong as not all commands
+    //        are owned by a single struct (like the way Storage does). Can we do better?
+
+    let result = match cmd {
+      Command::Set { .. } | Command::Get { .. } | Command::Delete { .. } => {
+        self.storage.lock().unwrap().execute(cmd)
       }
       Command::GetLastReplicationId => match self.instance_type {
         // IDEA: For a reader not having a last replication id is valid - it might be the beginning.
@@ -109,7 +90,7 @@ impl App {
         InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
       },
       Command::Sync { dump } => {
-        self.replicator.restore(self.storage.clone(), dump);
+        self.replicator.restore(self.storage.clone(), dump.clone());
         // FIXME: Do a proper result
         ResponseFrame::Success
       }

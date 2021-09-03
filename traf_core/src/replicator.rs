@@ -1,6 +1,7 @@
 use crate::interpreter::Command;
 use crate::interpreter::Interpreter;
 use crate::storage::Storage;
+use crate::Executor;
 use std::convert::{TryFrom, TryInto};
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
@@ -178,15 +179,18 @@ impl Replicator {
     }
   }
 
-  pub fn restore(&self, storage: Arc<Mutex<Storage>>, mut dump: Vec<u8>) {
+  pub fn restore(&self, storage: Arc<Mutex<Storage>>, dump: Vec<u8>) {
     match SyncChunkList::try_from(dump) {
       Ok(list) => {
         list.0.into_iter().for_each(|cmd| {
           // FIXME: There should be something that makes the storage actions from a command.
-          unimplemented!();
+          storage
+            .lock()
+            .expect("Failed gaining storage lock")
+            .execute(&cmd);
         });
       }
-      Err(err) => error!("Failed decoding commands from chunk bytes"),
+      Err(_) => error!("Failed decoding commands from chunk bytes"),
     };
   }
 
