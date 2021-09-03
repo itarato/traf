@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 
 use clap::{self, Arg};
+use interpreter::Command;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -8,7 +9,10 @@ use tokio::sync::oneshot;
 
 use crate::app::{App, InstanceType};
 use crate::replicator::ReaderList;
-use traf_lib::frame_reader::{Frame, FramedTcpStream};
+use traf_lib::{
+  frame_reader::{Frame, FramedTcpStream},
+  response_frame::ResponseFrame,
+};
 
 #[macro_use]
 extern crate log;
@@ -28,6 +32,10 @@ impl FrameAndChannel {
   fn new(frame: Frame, channel: oneshot::Sender<Vec<u8>>) -> Self {
     FrameAndChannel { frame, channel }
   }
+}
+
+pub trait Executor {
+  fn execute(&mut self, command: &Command) -> ResponseFrame;
 }
 
 // IDEA: (BIG) distributed layout
