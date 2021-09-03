@@ -118,7 +118,7 @@ impl App {
 
     match &result {
       // Mutating operations have a result (for now) of ::Success - which is the only case
-      // we need replica/backup tracking.
+      // when we need replica/backup tracking.
       &ResponseFrame::Success => {
         self.backup.log(&cmd);
 

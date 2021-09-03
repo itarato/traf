@@ -1,15 +1,15 @@
+use crate::interpreter::Command;
 use crate::interpreter::Interpreter;
+use crate::storage::Storage;
+use std::borrow::Borrow;
 use std::convert::{TryFrom, TryInto};
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use traf_client::Client;
-
 use tokio::spawn;
-
-use crate::interpreter::Command;
-use crate::storage::Storage;
+use traf_client::Client;
 
 type EventPtrT = u64;
 
@@ -134,26 +134,40 @@ impl Replicator {
       - arglist to accept reader
     */
 
+    let event_log_pointers: Arc<Vec<EventPtrT>> = Arc::new(self.fetch_event_log_pointers());
+    let event_logs: Arc<Vec<u8>> = Arc::new(self.fetch_event_logs());
+
     for reader in &self.readers.0 {
       let addr = reader.addr.clone();
+
+      let event_log_pointers = event_log_pointers.clone();
+      let event_logs = event_logs.clone();
+
       spawn(async move {
         // FIXME: error handling
-        let mut client = Client::connect(addr)
+        let mut client = Client::connect(addr.clone())
           .await
           .expect("Failed connecting to reader");
 
-        client
-          .last_replication_id()
-          .await
-          .and_then(|last_replication_id_result| {
+        match client.last_replication_id().await {
+          Ok(last_replication_id_result) => {
             let replication_id_start = last_replication_id_result.map(|id| id + 1).unwrap_or(0);
 
-            // #1 Fetch range [replication_id_start..] from event log
-            // #2 Sent it to client.sync
-            unimplemented!();
+            let range_start = event_log_pointers[replication_id_start as usize];
+            let sync_payload = Vec::from(&event_logs[range_start as usize..]);
 
-            Ok(())
-          });
+            client
+              .batch_sync(sync_payload)
+              .await
+              .unwrap_or_else(|err| warn!("Failed syncing {:?} due to {:?}", addr, err));
+          }
+          Err(err) => {
+            warn!(
+              "Failed reading last replication id of {:?} due to {:?}",
+              addr, err
+            );
+          }
+        };
       });
     }
   }
@@ -165,6 +179,56 @@ impl Replicator {
   fn should_sync(&self) -> bool {
     // IDEA: figure out some reasonable frequency/rule for replication.
     true
+  }
+
+  // FIXME: There might be code parts where EventPtrT serialization is hardcoded to 8s of bytes.
+  //        We should use `size_of` everywhere.
+  fn fetch_event_log_pointers(&self) -> Vec<EventPtrT> {
+    let mut event_log_pointers_file = OpenOptions::new()
+      .read(true)
+      .write(false)
+      .create(true)
+      .truncate(false)
+      .append(false)
+      .open(self.event_log_pointers_file_path())
+      .expect("Cannot open event log pointer file for read");
+
+    let mut buf: Vec<u8> = vec![];
+    event_log_pointers_file
+      .read_to_end(&mut buf)
+      .expect("Failed reading event log pointer file");
+
+    let ptr_size: usize = size_of::<EventPtrT>();
+
+    buf[..]
+      .chunks(ptr_size)
+      .map(|chunk| {
+        if chunk.len() < ptr_size {
+          panic!("Invalid bytes");
+        }
+
+        EventPtrT::from_be_bytes(chunk.try_into().expect("Cannot create fixed array"))
+      })
+      .collect()
+  }
+
+  // FIXME: This is grossly inefficient to load a designed-to-be-huge file. Rather seek and fetch the fragment.
+  fn fetch_event_logs(&self) -> Vec<u8> {
+    let mut event_log_file = OpenOptions::new()
+      .read(true)
+      .write(false)
+      .create(true)
+      .truncate(false)
+      .append(false)
+      .open(self.event_log_file_path())
+      .expect("Cannot open event log file for read");
+
+    let mut buf: Vec<u8> = vec![];
+    event_log_file
+      .read_to_end(&mut buf)
+      .expect("Failed reading event log pointer file");
+
+    buf
   }
 
   fn append_event_log(&self, bytes: Vec<u8>) {
