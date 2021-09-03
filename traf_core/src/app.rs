@@ -33,9 +33,7 @@ impl App {
     readers: ReaderList,
     rx: Receiver<FrameAndChannel>,
   ) -> Self {
-    let storage = Arc::new(Mutex::new(Storage::new(
-      instance_type == InstanceType::Reader,
-    )));
+    let storage = Arc::new(Mutex::new(Storage::new()));
     let backup = FileBackup::new("/tmp".into());
 
     backup.restore(storage.clone());
@@ -77,9 +75,11 @@ impl App {
     //        are owned by a single struct (like the way Storage does). Can we do better?
 
     let result = match cmd {
-      Command::Set { .. } | Command::Get { .. } | Command::Delete { .. } => {
-        self.storage.lock().unwrap().execute(cmd)
-      }
+      Command::Set { .. } | Command::Delete { .. } => match self.instance_type {
+        InstanceType::Reader => ResponseFrame::ErrorInvalidCommand,
+        InstanceType::Writer => self.storage.lock().unwrap().execute(cmd),
+      },
+      Command::Get { .. } => self.storage.lock().unwrap().execute(cmd),
       Command::GetLastReplicationId => match self.instance_type {
         // IDEA: For a reader not having a last replication id is valid - it might be the beginning.
         //        Though it's also a weakness as we cannot really tell if that's legitimate or not.
@@ -90,7 +90,17 @@ impl App {
         InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
       },
       Command::Sync { dump } => {
-        self.replicator.restore(self.storage.clone(), dump.clone());
+        let changes_count = self.replicator.restore(self.storage.clone(), dump.clone());
+        self.last_replica_id = self
+          .last_replica_id
+          .map(|count| count + changes_count)
+          .or_else(|| {
+            if changes_count == 0 {
+              None
+            } else {
+              Some(changes_count - 1)
+            }
+          });
         // FIXME: Do a proper result
         ResponseFrame::Success
       }

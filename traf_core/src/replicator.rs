@@ -179,19 +179,28 @@ impl Replicator {
     }
   }
 
-  pub fn restore(&self, storage: Arc<Mutex<Storage>>, dump: Vec<u8>) {
+  // Returns the number or replica changes.
+  pub fn restore(&self, storage: Arc<Mutex<Storage>>, dump: Vec<u8>) -> EventPtrT {
     match SyncChunkList::try_from(dump) {
       Ok(list) => {
+        let changes_count = list.0.len() as EventPtrT;
+
         list.0.into_iter().for_each(|cmd| {
           // FIXME: There should be something that makes the storage actions from a command.
+          // FIXME: Storage is readonly - so SET/DELETE won't work. Fix it.
           storage
             .lock()
             .expect("Failed gaining storage lock")
             .execute(&cmd);
         });
+
+        changes_count
       }
-      Err(_) => error!("Failed decoding commands from chunk bytes"),
-    };
+      Err(_) => {
+        error!("Failed decoding commands from chunk bytes");
+        0
+      }
+    }
   }
 
   fn should_sync(&self) -> bool {

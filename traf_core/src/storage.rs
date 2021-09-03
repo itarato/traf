@@ -8,14 +8,12 @@ type ValueT = Vec<u8>;
 
 pub struct Storage {
   data: HashMap<KeyT, ValueT>,
-  read_only: bool,
 }
 
 impl Storage {
-  pub fn new(read_only: bool) -> Self {
+  pub fn new() -> Self {
     Storage {
       data: Default::default(),
-      read_only,
     }
   }
 
@@ -36,13 +34,9 @@ impl Executor for Storage {
   fn execute(&mut self, command: &Command) -> ResponseFrame {
     match command.clone() {
       Command::Set { key, value } => {
-        if self.read_only {
-          ResponseFrame::ErrorInvalidCommand
-        } else {
-          info!("SET {:?} {:?}", key, value);
-          self.set(key, value);
-          ResponseFrame::Success
-        }
+        info!("SET {:?} {:?}", key, value);
+        self.set(key, value);
+        ResponseFrame::Success
       }
       Command::Get { key } => {
         info!("GET {:?}", key);
@@ -52,15 +46,11 @@ impl Executor for Storage {
         }
       }
       Command::Delete { key } => {
-        if self.read_only {
-          ResponseFrame::ErrorInvalidCommand
+        info!("DELETE {:?}", key);
+        if self.delete(key) {
+          ResponseFrame::Success
         } else {
-          info!("DELETE {:?}", key);
-          if self.delete(key) {
-            ResponseFrame::Success
-          } else {
-            ResponseFrame::ValueMissing
-          }
+          ResponseFrame::ValueMissing
         }
       }
       _ => ResponseFrame::ErrorInvalidCommand,
