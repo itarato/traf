@@ -1,7 +1,6 @@
 use crate::interpreter::Command;
 use crate::interpreter::Interpreter;
 use crate::storage::Storage;
-use std::borrow::Borrow;
 use std::convert::{TryFrom, TryInto};
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
@@ -28,8 +27,12 @@ impl TryFrom<&str> for Reader {
   type Error = ();
 
   fn try_from(s: &str) -> Result<Self, Self::Error> {
-    // FIXME: add validation
-    Ok(Reader::new(s.into()))
+    if s.len() == 0 {
+      Err(())
+    } else {
+      // FIXME: add validation
+      Ok(Reader::new(s.into()))
+    }
   }
 }
 
@@ -50,7 +53,10 @@ impl TryFrom<&str> for ReaderList {
 
     let mut readers: Vec<Reader> = vec![];
     for reader_raw in reader_raw_list {
-      readers.push(Reader::try_from(reader_raw)?);
+      match Reader::try_from(reader_raw) {
+        Ok(reader) => readers.push(reader),
+        _ => (),
+      };
     }
 
     Ok(ReaderList::new(readers))
@@ -186,10 +192,9 @@ impl Replicator {
   fn fetch_event_log_pointers(&self) -> Vec<EventPtrT> {
     let mut event_log_pointers_file = OpenOptions::new()
       .read(true)
-      .write(false)
+      .write(true)
       .create(true)
       .truncate(false)
-      .append(false)
       .open(self.event_log_pointers_file_path())
       .expect("Cannot open event log pointer file for read");
 
@@ -216,10 +221,9 @@ impl Replicator {
   fn fetch_event_logs(&self) -> Vec<u8> {
     let mut event_log_file = OpenOptions::new()
       .read(true)
-      .write(false)
+      .write(true)
       .create(true)
       .truncate(false)
-      .append(false)
       .open(self.event_log_file_path())
       .expect("Cannot open event log file for read");
 
