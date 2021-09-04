@@ -10,6 +10,7 @@ use tokio::io::{self};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use traf_lib::frame_reader::{Frame, FramedTcpStream};
 
+// FIXME: Duplication from traf_lib
 #[derive(Debug)]
 pub enum ResponseFrame {
   Success,

@@ -9,7 +9,7 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::spawn;
-use traf_client::{Client};
+use traf_client::Client;
 use traf_lib::response_frame::ResponseFrame;
 
 type EventPtrT = u64;
@@ -133,6 +133,8 @@ impl Replicator {
     };
   }
 
+  // IDEA: There should be a sync at the beginning too -> maybe not? (Should a start state reader/writer)
+  //        be different?
   async fn sync(&self) {
     /*
       collect all last ids from all readers
@@ -161,7 +163,10 @@ impl Replicator {
         match client.last_replication_id().await {
           Ok(last_replication_id_result) => {
             let replication_id_start = last_replication_id_result.map(|id| id + 1).unwrap_or(0);
-            info!("Writer init sync with reader from ID: {}", replication_id_start);
+            info!(
+              "Writer init sync with reader from ID: {}",
+              replication_id_start
+            );
 
             // !!! BUG !!!
             // thread 'tokio-runtime-worker' panicked at 'index out of bounds: the len is 101 but the index is 725',
@@ -195,10 +200,11 @@ impl Replicator {
           match storage
             .lock()
             .expect("Failed gaining storage lock")
-            .execute(&cmd) {
-              ResponseFrame::ErrorInvalidCommand => panic!("Failed executing batch sync cmd"),
-              _ => (),
-            };
+            .execute(&cmd)
+          {
+            ResponseFrame::ErrorInvalidCommand => panic!("Failed executing batch sync cmd"),
+            _ => (),
+          };
         });
 
         changes_count
