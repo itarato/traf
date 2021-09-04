@@ -171,6 +171,12 @@ impl Replicator {
             // !!! BUG !!!
             // thread 'tokio-runtime-worker' panicked at 'index out of bounds: the len is 101 but the index is 725',
             // traf_core/src/replicator.rs:163:31 stack backtrace:
+            // Foundings:
+            //  - Seems that due to event files being populated async a sync can send over more than the\
+            //    intended batch -> this results some changes arriving twice and counted twice
+            //    which bumps the last_replication_id uncontrollably
+            //    Proposed solution:
+            //    Make sure a sync is always clear on the range it syncs
             let range_start = event_log_pointers[replication_id_start as usize];
             let sync_payload = Vec::from(&event_logs[range_start as usize..]);
 
