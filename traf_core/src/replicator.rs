@@ -160,6 +160,9 @@ impl Replicator {
           Ok(last_replication_id_result) => {
             let replication_id_start = last_replication_id_result.map(|id| id + 1).unwrap_or(0);
 
+            // !!! BUG !!!
+            // thread 'tokio-runtime-worker' panicked at 'index out of bounds: the len is 101 but the index is 725',
+            // traf_core/src/replicator.rs:163:31 stack backtrace:
             let range_start = event_log_pointers[replication_id_start as usize];
             let sync_payload = Vec::from(&event_logs[range_start as usize..]);
 
