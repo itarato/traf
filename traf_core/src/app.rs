@@ -91,6 +91,9 @@ impl App {
       },
       Command::Sync { dump } => {
         let changes_count = self.replicator.restore(self.storage.clone(), dump.clone());
+
+        info!("Reader replica ID before: {:?} + changes: {}", self.last_replica_id, changes_count);
+
         self.last_replica_id = self
           .last_replica_id
           .map(|count| count + changes_count)
@@ -101,6 +104,7 @@ impl App {
               Some(changes_count - 1)
             }
           });
+
         // FIXME: Do a proper result
         ResponseFrame::Success
       }

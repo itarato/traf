@@ -9,7 +9,8 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::spawn;
-use traf_client::Client;
+use traf_client::{Client};
+use traf_lib::response_frame::ResponseFrame;
 
 type EventPtrT = u64;
 
@@ -120,6 +121,7 @@ impl Replicator {
         let bytes = cmd.as_bytes().unwrap();
         let pos = self.event_log_file_size().unwrap_or(0);
 
+        // FIXME: This 2 should be atomic
         self.append_event_log(bytes);
         self.append_event_log_pointers(pos);
 
@@ -159,6 +161,7 @@ impl Replicator {
         match client.last_replication_id().await {
           Ok(last_replication_id_result) => {
             let replication_id_start = last_replication_id_result.map(|id| id + 1).unwrap_or(0);
+            info!("Writer init sync with reader from ID: {}", replication_id_start);
 
             // !!! BUG !!!
             // thread 'tokio-runtime-worker' panicked at 'index out of bounds: the len is 101 but the index is 725',
@@ -189,12 +192,13 @@ impl Replicator {
         let changes_count = list.0.len() as EventPtrT;
 
         list.0.into_iter().for_each(|cmd| {
-          // FIXME: There should be something that makes the storage actions from a command.
-          // FIXME: Storage is readonly - so SET/DELETE won't work. Fix it.
-          storage
+          match storage
             .lock()
             .expect("Failed gaining storage lock")
-            .execute(&cmd);
+            .execute(&cmd) {
+              ResponseFrame::ErrorInvalidCommand => panic!("Failed executing batch sync cmd"),
+              _ => (),
+            };
         });
 
         changes_count
