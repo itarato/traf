@@ -65,13 +65,25 @@ impl TryFrom<&str> for ReaderList {
   }
 }
 
-struct SyncChunkList(Vec<Command>);
+struct SyncChunk {
+  command: Command,
+  number: EventPtrT,
+}
+
+impl SyncChunk {
+  fn new(command: Command, number: EventPtrT) -> Self {
+    SyncChunk { command, number }
+  }
+}
+
+struct SyncChunkList(Vec<SyncChunk>);
 
 impl TryFrom<Vec<u8>> for SyncChunkList {
   type Error = ();
 
   fn try_from(mut bytes: Vec<u8>) -> Result<Self, Self::Error> {
-    let mut commands: Vec<Command> = vec![];
+    let mut chunks: Vec<SyncChunk> = vec![];
+    let ptr_size = size_of::<EventPtrT>();
 
     loop {
       if bytes.len() == 0 {
@@ -79,13 +91,23 @@ impl TryFrom<Vec<u8>> for SyncChunkList {
       }
 
       // Missing size bytes.
-      if bytes.len() < 8 {
+      if bytes.len() < ptr_size {
         return Err(());
       }
 
-      let size_marker: Vec<u8> = bytes.drain(..8).collect();
-      let chunk_size: u64 = match size_marker.try_into() {
-        Ok(size_bytes) => u64::from_be_bytes(size_bytes),
+      let size_marker: Vec<u8> = bytes.drain(..ptr_size).collect();
+      let chunk_size: EventPtrT = match size_marker.try_into() {
+        Ok(size_bytes) => EventPtrT::from_be_bytes(size_bytes),
+        Err(_) => return Err(()),
+      };
+
+      if bytes.len() < ptr_size {
+        return Err(());
+      }
+
+      let chunk_number_marker: Vec<u8> = bytes.drain(..ptr_size).collect();
+      let chunk_number: EventPtrT = match chunk_number_marker.try_into() {
+        Ok(chunk_number_bytes) => EventPtrT::from_be_bytes(chunk_number_bytes),
         Err(_) => return Err(()),
       };
 
@@ -96,34 +118,48 @@ impl TryFrom<Vec<u8>> for SyncChunkList {
       let command_bytes: Vec<u8> = bytes.drain(..chunk_size as usize).collect();
       let command = Interpreter::new().read(command_bytes);
 
-      commands.push(command);
+      chunks.push(SyncChunk::new(command, chunk_number));
     }
 
-    Ok(SyncChunkList(commands))
+    Ok(SyncChunkList(chunks))
   }
 }
 
 pub struct Replicator {
   dir: String,
   readers: ReaderList,
+  event_log_mutex: Mutex<()>,
 }
 
 // IDEA: the sync to readers probably better do batches to avoid always being networked.
 
 impl Replicator {
   pub fn new(dir: String, readers: ReaderList) -> Self {
-    Self { dir, readers }
+    Self {
+      dir,
+      readers,
+      event_log_mutex: Mutex::new(()),
+    }
   }
 
   pub async fn log(&mut self, cmd: &Command) {
     match cmd {
       Command::Set { .. } | Command::Delete { .. } => {
         let bytes = cmd.as_bytes().unwrap();
-        let pos = self.event_log_file_size().unwrap_or(0);
 
-        // FIXME: This 2 should be atomic
-        self.append_event_log(bytes);
-        self.append_event_log_pointers(pos);
+        {
+          let _event_mutex = self
+            .event_log_mutex
+            .lock()
+            .expect("Failed locking event ops");
+
+          let next_event_number = self.next_event_log_number();
+          let pos = self.event_log_file_size().unwrap_or(0);
+
+          // FIXME: This 2 should be atomic
+          self.append_event_log(bytes, next_event_number);
+          self.append_event_log_pointers(pos);
+        }
 
         if self.should_sync() {
           self.sync().await;
@@ -196,28 +232,41 @@ impl Replicator {
     }
   }
 
-  // Returns the number or replica changes.
-  pub fn restore(&self, storage: Arc<Mutex<Storage>>, dump: Vec<u8>) -> EventPtrT {
+  // Returns the last applied event ID.
+  // FIXME: Pass the current app latest event ID and only apply the missing ones.
+  pub fn restore(
+    &self,
+    storage: Arc<Mutex<Storage>>,
+    dump: Vec<u8>,
+    current_committed_event_id: Option<EventPtrT>,
+  ) -> Option<EventPtrT> {
     match SyncChunkList::try_from(dump) {
       Ok(list) => {
-        let changes_count = list.0.len() as EventPtrT;
+        let mut last_successful_event_id: Option<EventPtrT> = None;
 
-        list.0.into_iter().for_each(|cmd| {
+        list.0.into_iter().for_each(|chunk| {
+          // If the reader instance already have this event, skip it.
+          if current_committed_event_id.is_some()
+            && current_committed_event_id.unwrap() >= chunk.number
+          {
+            return;
+          }
+
           match storage
             .lock()
             .expect("Failed gaining storage lock")
-            .execute(&cmd)
+            .execute(&chunk.command)
           {
             ResponseFrame::ErrorInvalidCommand => panic!("Failed executing batch sync cmd"),
-            _ => (),
+            _ => last_successful_event_id = Some(chunk.number),
           };
         });
 
-        changes_count
+        last_successful_event_id
       }
       Err(_) => {
         error!("Failed decoding commands from chunk bytes");
-        0
+        None
       }
     }
   }
@@ -275,7 +324,7 @@ impl Replicator {
     buf
   }
 
-  fn append_event_log(&self, bytes: Vec<u8>) {
+  fn append_event_log(&self, bytes: Vec<u8>, count_number: EventPtrT) {
     let mut event_log_file = OpenOptions::new()
       .read(false)
       .write(true)
@@ -288,6 +337,9 @@ impl Replicator {
     event_log_file
       .write(&bytes.len().to_be_bytes())
       .expect("Cannot write event log size");
+    event_log_file
+      .write(&count_number.to_be_bytes())
+      .expect("Cannot write count number");
     event_log_file
       .write_all(&bytes[..])
       .expect("Cannot write event log");
@@ -316,9 +368,15 @@ impl Replicator {
     Path::new(&self.dir).join("__traf_replicator_event_log.db")
   }
 
-  fn event_log_file_size(&self) -> Option<EventPtrT> {
+  fn event_log_file_size(&self) -> Option<u64> {
     fs::metadata(self.event_log_file_path())
       .map(|metadata| Some(metadata.len()))
       .unwrap_or(None)
+  }
+
+  fn next_event_log_number(&self) -> EventPtrT {
+    fs::metadata(self.event_log_pointers_file_path())
+      .map(|metadata| metadata.len() / size_of::<EventPtrT>() as EventPtrT)
+      .unwrap_or(0)
   }
 }

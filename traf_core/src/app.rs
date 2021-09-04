@@ -21,6 +21,7 @@ pub struct App {
   instance_type: InstanceType,
   replicator: Replicator,
   last_replica_id: Option<u64>,
+  replica_sync_mutex: Mutex<()>,
 }
 
 // IDEA: Something smells with the App being either writer or reader and some behaviour divides on this.
@@ -46,6 +47,7 @@ impl App {
       instance_type,
       replicator: Replicator::new("/tmp".into(), readers),
       last_replica_id,
+      replica_sync_mutex: Mutex::new(()),
     }
   }
 
@@ -90,23 +92,24 @@ impl App {
         InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
       },
       Command::Sync { dump } => {
-        let changes_count = self.replicator.restore(self.storage.clone(), dump.clone());
+        let _replica_mutex = self
+          .replica_sync_mutex
+          .lock()
+          .expect("Failed locking replica sync");
+
+        let last_event_id =
+          self
+            .replicator
+            .restore(self.storage.clone(), dump.clone(), self.last_replica_id);
 
         info!(
-          "Reader replica ID before: {:?} + changes: {}",
-          self.last_replica_id, changes_count
+          "Reader replica ID before: {:?} + applied until: {:?}",
+          self.last_replica_id, last_event_id
         );
 
-        self.last_replica_id = self
-          .last_replica_id
-          .map(|count| count + changes_count)
-          .or_else(|| {
-            if changes_count == 0 {
-              None
-            } else {
-              Some(changes_count - 1)
-            }
-          });
+        if let Some(_) = last_event_id {
+          self.last_replica_id = last_event_id;
+        }
 
         // FIXME: Do a proper result
         ResponseFrame::Success

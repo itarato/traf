@@ -169,6 +169,7 @@ impl FileBackup {
     instance
   }
 
+  // IDEA: This is not safe when the counter is incrementing for both single and batched ops.
   fn should_backup(&self) -> bool {
     let change_count: usize = self
       .changesets
