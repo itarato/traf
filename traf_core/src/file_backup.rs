@@ -207,7 +207,12 @@ impl FileBackup {
 
           changeset.updates.insert(key.clone(), value.clone());
         }
-        _ => (),
+        // FIXME: This is probably a bad place to turn a sync-batch into a changelog, since it might not be all
+        //        new to the storage, so we don't know which one should be there - also that logic is already
+        //        encapsulated in the replicator.
+        //        Should this backup be part of the storage?
+        Command::Sync { dump } => unimplemented!(),
+        Command::Get { .. } | Command::GetLastReplicationId | Command::Invalid => (),
       };
     }
 
