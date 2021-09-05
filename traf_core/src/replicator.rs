@@ -180,17 +180,14 @@ impl Replicator {
       - command to accept sync
       - arglist to accept reader
     */
-
-    let event_log_pointers: Arc<Vec<EventPtrT>> = Arc::new(self.fetch_event_log_pointers());
-    let event_logs: Arc<Vec<u8>> = Arc::new(self.fetch_event_logs());
+    let mut join_handles: Vec<_> = vec![];
 
     for reader in &self.readers.0 {
       let addr = reader.addr.clone();
+      let event_log_pointers_file_path = self.event_log_pointers_file_path();
+      let event_log_file_path = self.event_log_file_path();
 
-      let event_log_pointers = event_log_pointers.clone();
-      let event_logs = event_logs.clone();
-
-      spawn(async move {
+      let join_handle = spawn(async move {
         // FIXME: error handling
         let mut client = Client::connect(addr.clone())
           .await
@@ -203,6 +200,15 @@ impl Replicator {
               "Writer init sync with reader from ID: {}",
               replication_id_start
             );
+
+            // FIXME: This is horribly inefficient to load these always. The problem is that
+            //        if this happens once, and we ask for the reader's latest event id after getting it,
+            //        the reader might already got a newer update which would result a last-id
+            //        greater than our event registry.
+            //        At least we should only load partial file data, if that helps.
+            let event_log_pointers: Vec<EventPtrT> =
+              Self::fetch_event_log_pointers(event_log_pointers_file_path);
+            let event_logs: Vec<u8> = Self::fetch_event_logs(event_log_file_path);
 
             // !!! BUG !!!
             // thread 'tokio-runtime-worker' panicked at 'index out of bounds: the len is 101 but the index is 725',
@@ -229,6 +235,11 @@ impl Replicator {
           }
         };
       });
+      join_handles.push(join_handle);
+    }
+
+    for join_handle in join_handles {
+      join_handle.await.expect("Failed closing thread");
     }
   }
 
@@ -278,13 +289,13 @@ impl Replicator {
 
   // FIXME: There might be code parts where EventPtrT serialization is hardcoded to 8s of bytes.
   //        We should use `size_of` everywhere.
-  fn fetch_event_log_pointers(&self) -> Vec<EventPtrT> {
+  fn fetch_event_log_pointers(event_log_pointers_file_path: PathBuf) -> Vec<EventPtrT> {
     let mut event_log_pointers_file = OpenOptions::new()
       .read(true)
       .write(true)
       .create(true)
       .truncate(false)
-      .open(self.event_log_pointers_file_path())
+      .open(event_log_pointers_file_path)
       .expect("Cannot open event log pointer file for read");
 
     let mut buf: Vec<u8> = vec![];
@@ -307,13 +318,13 @@ impl Replicator {
   }
 
   // FIXME: This is grossly inefficient to load a designed-to-be-huge file. Rather seek and fetch the fragment.
-  fn fetch_event_logs(&self) -> Vec<u8> {
+  fn fetch_event_logs(event_log_file_path: PathBuf) -> Vec<u8> {
     let mut event_log_file = OpenOptions::new()
       .read(true)
       .write(true)
       .create(true)
       .truncate(false)
-      .open(self.event_log_file_path())
+      .open(event_log_file_path)
       .expect("Cannot open event log file for read");
 
     let mut buf: Vec<u8> = vec![];
