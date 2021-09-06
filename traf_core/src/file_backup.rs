@@ -211,7 +211,9 @@ impl FileBackup {
         //        new to the storage, so we don't know which one should be there - also that logic is already
         //        encapsulated in the replicator.
         //        Should this backup be part of the storage?
-        Command::Sync { dump } => unimplemented!(),
+        Command::Sync { .. } => {
+          unimplemented!("We cannot handle sync here, should be translated to SET/DELETE")
+        }
         Command::Get { .. } | Command::GetLastReplicationId | Command::Invalid => (),
       };
     }

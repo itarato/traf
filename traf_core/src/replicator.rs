@@ -125,6 +125,12 @@ impl TryFrom<Vec<u8>> for SyncChunkList {
   }
 }
 
+#[derive(Default)]
+pub struct RestoreResult {
+  pub last_event_id: Option<EventPtrT>,
+  pub applied_commands: Vec<Command>,
+}
+
 pub struct Replicator {
   dir: String,
   readers: ReaderList,
@@ -250,11 +256,11 @@ impl Replicator {
     storage: Arc<Mutex<Storage>>,
     dump: Vec<u8>,
     current_committed_event_id: Option<EventPtrT>,
-  ) -> Option<EventPtrT> {
+  ) -> RestoreResult {
+    let mut result = RestoreResult::default();
+
     match SyncChunkList::try_from(dump) {
       Ok(list) => {
-        let mut last_successful_event_id: Option<EventPtrT> = None;
-
         list.0.into_iter().for_each(|chunk| {
           // If the reader instance already have this event, skip it.
           if current_committed_event_id.is_some()
@@ -268,18 +274,21 @@ impl Replicator {
             .expect("Failed gaining storage lock")
             .execute(&chunk.command)
           {
-            ResponseFrame::ErrorInvalidCommand => panic!("Failed executing batch sync cmd"),
-            _ => last_successful_event_id = Some(chunk.number),
+            ResponseFrame::Success => {
+              result.last_event_id = Some(chunk.number);
+              result.applied_commands.push(chunk.command);
+            }
+            ResponseFrame::ValueMissing => (),
+            _ => panic!("Failed executing batch sync cmd"),
           };
         });
-
-        last_successful_event_id
       }
       Err(_) => {
         error!("Failed decoding commands from chunk bytes");
-        None
       }
-    }
+    };
+
+    result
   }
 
   fn should_sync(&self) -> bool {

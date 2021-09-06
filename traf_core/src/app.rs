@@ -79,7 +79,15 @@ impl App {
     let result = match cmd {
       Command::Set { .. } | Command::Delete { .. } => match self.instance_type {
         InstanceType::Reader => ResponseFrame::ErrorInvalidCommand,
-        InstanceType::Writer => self.storage.lock().unwrap().execute(cmd),
+        InstanceType::Writer => {
+          let result = self.storage.lock().unwrap().execute(cmd);
+          match &result {
+            ResponseFrame::Success => self.backup.log(&cmd),
+            _ => (),
+          };
+
+          result
+        }
       },
       Command::Get { .. } => self.storage.lock().unwrap().execute(cmd),
       Command::GetLastReplicationId => match self.instance_type {
@@ -97,19 +105,25 @@ impl App {
           .lock()
           .expect("Failed locking replica sync");
 
-        let last_event_id =
+        let restore_result =
           self
             .replicator
             .restore(self.storage.clone(), dump.clone(), self.last_replica_id);
 
         info!(
           "Reader replica ID before: {:?} + applied until: {:?}",
-          self.last_replica_id, last_event_id
+          self.last_replica_id, restore_result.last_event_id
         );
 
-        if let Some(_) = last_event_id {
-          self.last_replica_id = last_event_id;
+        if let Some(_) = restore_result.last_event_id {
+          self.last_replica_id = restore_result.last_event_id;
         }
+
+        for cmd in restore_result.applied_commands {
+          self.backup.log(&cmd);
+        }
+
+        // TODO: Handle the applied commands here.
 
         // FIXME: Do a proper result
         ResponseFrame::Success
@@ -121,8 +135,6 @@ impl App {
       // Mutating operations have a result (for now) of ::Success - which is the only case
       // when we need replica/backup tracking.
       &ResponseFrame::Success => {
-        self.backup.log(&cmd);
-
         if !self.is_read_only() {
           self.replicator.log(&cmd).await;
         }
