@@ -24,7 +24,7 @@ use std::sync::{Arc, Mutex};
 //        can allocate a lot of space -> may result in a forever split.
 
 const SHARD_BREAK_LIMIT: usize = 1024;
-const CHANGELOG_TRESHOLD_TO_INIT_BACKUP: usize = 64;
+const CHANGELOG_TRESHOLD_TO_INIT_BACKUP: usize = 1;
 
 fn generate_random_name() -> String {
   let mut rng = rand::thread_rng();
@@ -177,7 +177,8 @@ impl FileBackup {
       .values()
       .map(|changeset| changeset.updates.len() + changeset.removals.len())
       .sum();
-    change_count >= CHANGELOG_TRESHOLD_TO_INIT_BACKUP
+
+    change_count % CHANGELOG_TRESHOLD_TO_INIT_BACKUP == 0
   }
 
   pub fn log(&mut self, cmd: &Command) {
