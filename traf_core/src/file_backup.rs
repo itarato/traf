@@ -170,6 +170,8 @@ impl FileBackup {
   }
 
   // IDEA: This is not safe when the counter is incrementing for both single and batched ops.
+  // IDEA: It's dangerous not to backup always - server might quits and we lose data. -> Should we have a
+  //        server BACKUP_FLUSH command?
   fn should_backup(&self) -> bool {
     let change_count: usize = self
       .changesets
