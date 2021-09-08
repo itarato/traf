@@ -8,34 +8,10 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use tokio::io::{self};
 use tokio::net::{TcpStream, ToSocketAddrs};
-use traf_lib::frame_reader::{Frame, FramedTcpStream};
-
-// FIXME: Duplication from traf_lib
-#[derive(Debug)]
-pub enum ResponseFrame {
-  Success,
-  ErrorInvalidCommand,
-  Value(Vec<u8>),
-  ValueMissing,
-}
-
-impl TryFrom<Vec<u8>> for ResponseFrame {
-  type Error = ();
-
-  fn try_from(mut v: Vec<u8>) -> Result<Self, ()> {
-    if v.len() == 0 {
-      return Err(());
-    }
-
-    match v.remove(0) {
-      0 => Ok(ResponseFrame::Success),
-      1 => Ok(ResponseFrame::ErrorInvalidCommand),
-      2 => Ok(ResponseFrame::Value(v)),
-      3 => Ok(ResponseFrame::ValueMissing),
-      _ => Err(()),
-    }
-  }
-}
+use traf_lib::{
+  frame_reader::{Frame, FramedTcpStream},
+  response_frame::ResponseFrame
+};
 
 #[derive(Debug)]
 pub struct Get {

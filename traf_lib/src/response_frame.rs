@@ -26,7 +26,7 @@ impl TryFrom<Vec<u8>> for ResponseFrame {
   type Error = ();
 
   fn try_from(mut v: Vec<u8>) -> Result<ResponseFrame, Self::Error> {
-    let type_byte: u8 = v.drain(..1).collect::<Vec<u8>>()[0];
+    let type_byte: u8 = v.remove(0);
 
     match type_byte {
       0 => Ok(Self::Success),
