@@ -125,10 +125,20 @@ impl TryFrom<Vec<u8>> for SyncChunkList {
   }
 }
 
-#[derive(Default)]
 pub struct RestoreResult {
   pub last_event_id: Option<EventPtrT>,
   pub applied_commands: Vec<Command>,
+  pub response: ResponseFrame,
+}
+
+impl RestoreResult {
+  fn new() -> Self {
+    Self {
+      last_event_id: None,
+      applied_commands: vec![],
+      response: ResponseFrame::Success,
+    }
+  }
 }
 
 pub struct Replicator {
@@ -257,16 +267,16 @@ impl Replicator {
     dump: Vec<u8>,
     current_committed_event_id: Option<EventPtrT>,
   ) -> RestoreResult {
-    let mut result = RestoreResult::default();
+    let mut result = RestoreResult::new();
 
     match SyncChunkList::try_from(dump) {
       Ok(list) => {
-        list.0.into_iter().for_each(|chunk| {
+        let _ = list.0.into_iter().try_for_each(|chunk| {
           // If the reader instance already have this event, skip it.
           if current_committed_event_id.is_some()
             && current_committed_event_id.unwrap() >= chunk.number
           {
-            return;
+            return Ok(());
           }
 
           match storage
@@ -277,14 +287,19 @@ impl Replicator {
             ResponseFrame::Success => {
               result.last_event_id = Some(chunk.number);
               result.applied_commands.push(chunk.command);
+              Ok(())
             }
-            ResponseFrame::ValueMissing => (),
-            _ => panic!("Failed executing batch sync cmd"),
-          };
+            ResponseFrame::ValueMissing => Ok(()),
+            _ => {
+              result.response = ResponseFrame::ErrorInvalidCommand;
+              Err(())
+            }
+          }
         });
       }
       Err(_) => {
         error!("Failed decoding commands from chunk bytes");
+        result.response = ResponseFrame::ErrorInvalidCommand;
       }
     };
 

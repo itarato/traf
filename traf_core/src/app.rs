@@ -123,10 +123,7 @@ impl App {
           self.backup.log(&cmd);
         }
 
-        // TODO: Handle the applied commands here.
-
-        // FIXME: Do a proper result
-        ResponseFrame::Success
+        restore_result.response
       }
       Command::Invalid => ResponseFrame::ErrorInvalidCommand,
     };
