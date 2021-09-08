@@ -210,10 +210,6 @@ impl FileBackup {
 
           changeset.updates.insert(key.clone(), value.clone());
         }
-        // FIXME: This is probably a bad place to turn a sync-batch into a changelog, since it might not be all
-        //        new to the storage, so we don't know which one should be there - also that logic is already
-        //        encapsulated in the replicator.
-        //        Should this backup be part of the storage?
         Command::Sync { .. } => {
           unimplemented!("We cannot handle sync here, should be translated to SET/DELETE")
         }
@@ -221,12 +217,11 @@ impl FileBackup {
       };
     }
 
-    // FIXME: this is temporary, should be called moderately.
     if self.should_backup() {
       self.backup();
       self.shard();
     } else {
-      // IDEA: drop is not running on process kill and we don't have a nice quit strategy yet.
+      // FIXME: drop is not running on process kill and we don't have a nice quit strategy yet.
       //        think about making change tracking safer (by not doing in memory for that too).
       //        Here we could just do an append-only write-out of changelog events - and drain
       //        on boot.
