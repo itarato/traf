@@ -14,7 +14,6 @@ pub enum InstanceType {
 }
 
 pub struct App {
-  interpreter: Interpreter,
   storage: Arc<Mutex<Storage>>,
   rx: Receiver<FrameAndChannel>,
   backup: FileBackup,
@@ -40,7 +39,6 @@ impl App {
     backup.restore(storage.clone());
 
     App {
-      interpreter: Interpreter::new(),
       storage: storage.clone(),
       rx,
       backup,
@@ -69,7 +67,7 @@ impl App {
   // - key defined?
 
   async fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
-    let ref cmd = self.interpreter.read(input);
+    let ref cmd = Command::from(input);
 
     // FIXME: cloning a SET command with value can be expensive. Try to avoid it.
 

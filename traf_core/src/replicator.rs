@@ -1,5 +1,4 @@
 use crate::interpreter::Command;
-use crate::interpreter::Interpreter;
 use crate::storage::Storage;
 use crate::Executor;
 use std::convert::{TryFrom, TryInto};
@@ -116,7 +115,7 @@ impl TryFrom<Vec<u8>> for SyncChunkList {
       }
 
       let command_bytes: Vec<u8> = bytes.drain(..chunk_size as usize).collect();
-      let command = Interpreter::new().read(command_bytes);
+      let command = Command::from(command_bytes);
 
       chunks.push(SyncChunk::new(command, chunk_number));
     }

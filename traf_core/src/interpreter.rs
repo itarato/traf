@@ -1,13 +1,15 @@
-pub struct Interpreter;
+#[derive(Clone)]
+pub enum Command {
+  Set { key: String, value: Vec<u8> },
+  Get { key: String },
+  Delete { key: String },
+  GetLastReplicationId,
+  Invalid,
+  Sync { dump: Vec<u8> },
+}
 
-// FIXME: This whole struct is useless. Just use Command.
-impl Interpreter {
-  pub fn new() -> Self {
-    Interpreter {}
-  }
-
-  // FIXME: this fn looks like ::From<Vec<u8>>
-  pub fn read(&self, input: Vec<u8>) -> Command {
+impl From<Vec<u8>> for Command {
+  fn from(input: Vec<u8>) -> Command {
     let after_cmd_space_pos = input
       .iter()
       .position(|ch| ch == &b' ')
@@ -49,16 +51,6 @@ impl Interpreter {
       Command::Invalid
     }
   }
-}
-
-#[derive(Clone)]
-pub enum Command {
-  Set { key: String, value: Vec<u8> },
-  Get { key: String },
-  Delete { key: String },
-  GetLastReplicationId,
-  Invalid,
-  Sync { dump: Vec<u8> },
 }
 
 impl Command {
