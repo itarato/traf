@@ -171,7 +171,6 @@ impl Replicator {
           let next_event_number = self.next_event_log_number();
           let pos = self.event_log_file_size().unwrap_or(0);
 
-          // FIXME: This 2 should be atomic
           self.append_event_log(bytes, next_event_number);
           self.append_event_log_pointers(pos);
         }
