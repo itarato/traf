@@ -284,7 +284,7 @@ impl FileBackup {
       }
 
       self.save_backup_keys(filehash, registered_backup_keys);
-      self.save_backup_values(filehash, value_file_content);
+      self.save_backup_values(filehash, &value_file_content[..]);
     });
 
     self.save_shard_registry();
@@ -382,8 +382,8 @@ impl FileBackup {
       self.save_backup_keys(&new_filehash_lhs, new_keys_lhs);
       self.save_backup_keys(&new_filehash_rhs, new_keys_rhs);
 
-      self.save_backup_values(&new_filehash_lhs, new_content_lhs);
-      self.save_backup_values(&new_filehash_rhs, new_content_rhs);
+      self.save_backup_values(&new_filehash_lhs, &new_content_lhs[..]);
+      self.save_backup_values(&new_filehash_rhs, &new_content_rhs[..]);
 
       self.delete_backup_keys(&filehash_to_split);
       self.delete_backup_values(&filehash_to_split);
@@ -437,6 +437,7 @@ impl FileBackup {
       .truncate(false)
       .open(self.key_file_path(filehash))
       .expect("Cannot open key file for read");
+
     serde_json::from_reader(key_file).unwrap_or(BackupKeys::default())
   }
 
@@ -476,7 +477,7 @@ impl FileBackup {
     fs::remove_file(self.key_file_path(filehash)).expect("Cannot delete keys file");
   }
 
-  fn save_backup_values(&self, filehash: &str, values: Vec<u8>) {
+  fn save_backup_values(&self, filehash: &str, values: &[u8]) {
     let mut value_file = OpenOptions::new()
       .read(false)
       .write(true)
@@ -484,9 +485,8 @@ impl FileBackup {
       .truncate(true)
       .open(self.value_file_path(filehash))
       .expect("Cannot open key file for write");
-    value_file
-      .write_all(&values[..])
-      .expect("Cannot write values");
+
+    value_file.write_all(values).expect("Cannot write values");
   }
 
   fn delete_backup_values(&self, filehash: &str) {

@@ -309,8 +309,6 @@ impl Replicator {
     true
   }
 
-  // FIXME: There might be code parts where EventPtrT serialization is hardcoded to 8s of bytes.
-  //        We should use `size_of` everywhere.
   fn fetch_event_log_pointers(event_log_pointers_file_path: PathBuf) -> Vec<EventPtrT> {
     let mut event_log_pointers_file = OpenOptions::new()
       .read(true)
