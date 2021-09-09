@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 #[derive(Clone)]
 pub enum Command {
   Set { key: String, value: Vec<u8> },
@@ -53,9 +55,10 @@ impl From<Vec<u8>> for Command {
   }
 }
 
-impl Command {
-  // FIXME: This looks like ::Into<Vec<u8>>
-  pub fn as_bytes(&self) -> Option<Vec<u8>> {
+impl TryInto<Vec<u8>> for Command {
+  type Error = ();
+
+  fn try_into(self) -> Result<Vec<u8>, Self::Error> {
     let mut bytes: Vec<u8> = vec![];
 
     match self {
@@ -73,9 +76,9 @@ impl Command {
         bytes.append(&mut Vec::from(&b"GET "[..]));
         bytes.append(&mut Vec::from(&key[..]));
       }
-      Command::Invalid | Command::GetLastReplicationId | Command::Sync { .. } => return None,
+      Command::Invalid | Command::GetLastReplicationId | Command::Sync { .. } => return Err(()),
     }
 
-    Some(bytes)
+    Ok(bytes)
   }
 }

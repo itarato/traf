@@ -160,7 +160,7 @@ impl Replicator {
   pub async fn log(&mut self, cmd: &Command) {
     match cmd {
       Command::Set { .. } | Command::Delete { .. } => {
-        let bytes = cmd.as_bytes().unwrap();
+        let bytes = cmd.clone().try_into().unwrap();
 
         {
           let _event_mutex = self
