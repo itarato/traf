@@ -160,7 +160,7 @@ impl Replicator {
   pub async fn log(&mut self, cmd: &Command) {
     match cmd {
       Command::Set { .. } | Command::Delete { .. } => {
-        let bytes = cmd.clone().try_into().unwrap();
+        let bytes: Vec<u8> = cmd.clone().try_into().unwrap();
 
         {
           let _event_mutex = self
@@ -171,7 +171,7 @@ impl Replicator {
           let next_event_number = self.next_event_log_number();
           let pos = self.event_log_file_size().unwrap_or(0);
 
-          self.append_event_log(bytes, next_event_number);
+          self.append_event_log(&bytes[..], next_event_number);
           self.append_event_log_pointers(pos);
         }
 
@@ -357,7 +357,7 @@ impl Replicator {
     buf
   }
 
-  fn append_event_log(&self, bytes: Vec<u8>, count_number: EventPtrT) {
+  fn append_event_log(&self, bytes: &[u8], count_number: EventPtrT) {
     let mut event_log_file = OpenOptions::new()
       .read(false)
       .write(true)
@@ -374,7 +374,7 @@ impl Replicator {
       .write(&count_number.to_be_bytes())
       .expect("Cannot write count number");
     event_log_file
-      .write_all(&bytes[..])
+      .write_all(bytes)
       .expect("Cannot write event log");
   }
 
