@@ -1,4 +1,4 @@
-use crate::interpreter::Command;
+use crate::command::Command;
 use crate::storage::Storage;
 use rand::Rng;
 use serde::{Deserialize, Serialize};

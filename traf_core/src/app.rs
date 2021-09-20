@@ -2,7 +2,7 @@ use crate::file_backup::FileBackup;
 use crate::replicator::{ReaderList, Replicator};
 use crate::storage::*;
 use crate::FrameAndChannel;
-use crate::{interpreter::*, Executor};
+use crate::{command::*, Executor};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
 use traf_lib::response_frame::ResponseFrame;

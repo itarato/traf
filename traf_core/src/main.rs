@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use clap::{self, Arg};
-use interpreter::Command;
+use command::Command;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -19,7 +19,7 @@ extern crate log;
 
 mod app;
 mod file_backup;
-mod interpreter;
+mod command;
 mod replicator;
 mod storage;
 

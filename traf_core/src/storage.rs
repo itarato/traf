@@ -1,6 +1,6 @@
 use traf_lib::response_frame::ResponseFrame;
 
-use crate::{interpreter::Command, Executor};
+use crate::{command::Command, Executor};
 use std::collections::HashMap;
 
 type KeyT = String;
