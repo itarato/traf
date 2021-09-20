@@ -113,8 +113,13 @@ impl Client {
       })
   }
 
-  // FIXME: This is a bad pattern to expect a generic blob as batch command list. We should not expect
+  // FIXME (?) (hard): This is a bad pattern to expect a generic blob as batch command list. We should not expect
   //        a client user to know how to craft it.
+  //        Problem: this is how its stored in logs - would be quite a waste to back and forth convert.
+  //
+  // Request a batch sync from the server.
+  //
+  // param blob Byte sequence of list of commands: ([8 bytes: u64 size of command][bytes: command])*
   pub async fn batch_sync(&mut self, mut blob: Vec<u8>) -> Result<(), ClientError> {
     let mut part_command: Vec<u8> = Vec::from(&b"SYNC "[..]);
     part_command.append(&mut blob);

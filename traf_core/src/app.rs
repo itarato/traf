@@ -51,11 +51,11 @@ impl App {
 
   pub async fn listen(&mut self) {
     info!("app start listening");
-    while let Some(frame) = self.rx.recv().await {
+    while let Some(frame_and_channel) = self.rx.recv().await {
       info!("app channel got message");
-      let res = self.execute(frame.frame.bytes).await;
+      let res = self.execute(frame_and_channel.frame.bytes).await;
 
-      frame
+      frame_and_channel
         .channel
         .send(res.into())
         .expect("Failed sending response");
@@ -80,7 +80,7 @@ impl App {
         InstanceType::Writer => {
           let result = self.storage.lock().unwrap().execute(cmd);
           match &result {
-            ResponseFrame::Success => self.backup.log(&cmd),
+            ResponseFrame::Success => self.backup.log(cmd),
             _ => (),
           };
 
@@ -117,8 +117,8 @@ impl App {
           self.last_replica_id = restore_result.last_event_id;
         }
 
-        for cmd in restore_result.applied_commands {
-          self.backup.log(&cmd);
+        for applied_cmd in &restore_result.applied_commands {
+          self.backup.log(applied_cmd);
         }
 
         restore_result.response
