@@ -31,8 +31,8 @@ impl Storage {
 }
 
 impl Executor for Storage {
-  fn execute(&mut self, command: &Command) -> ResponseFrame {
-    match command.clone() {
+  fn execute(&mut self, command: Command) -> ResponseFrame {
+    match command {
       Command::Set { key, value } => {
         info!("SET {:?} {:?}", key, value);
         self.set(key, value);

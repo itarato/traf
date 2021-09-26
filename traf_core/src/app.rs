@@ -67,7 +67,7 @@ impl App {
   // - key defined?
 
   async fn execute(&mut self, input: Vec<u8>) -> ResponseFrame {
-    let ref cmd = Command::from(input);
+    let cmd = Command::from(input);
 
     // FIXME: cloning a SET command with value can be expensive. Try to avoid it.
 
@@ -78,16 +78,16 @@ impl App {
       Command::Set { .. } | Command::Delete { .. } => match self.instance_type {
         InstanceType::Reader => ResponseFrame::ErrorInvalidCommand,
         InstanceType::Writer => {
-          let result = self.storage.lock().unwrap().execute(cmd);
+          let result = self.storage.lock().unwrap().execute(cmd.clone());
           match &result {
-            ResponseFrame::Success => self.backup.log(cmd),
+            ResponseFrame::Success => self.backup.log(&cmd),
             _ => (),
           };
 
           result
         }
       },
-      Command::Get { .. } => self.storage.lock().unwrap().execute(cmd),
+      Command::Get { .. } => self.storage.lock().unwrap().execute(cmd.clone()),
       Command::GetLastReplicationId => match self.instance_type {
         // IDEA: For a reader not having a last replication id is valid - it might be the beginning.
         //        Though it's also a weakness as we cannot really tell if that's legitimate or not.
@@ -97,7 +97,7 @@ impl App {
         },
         InstanceType::Writer => ResponseFrame::ErrorInvalidCommand,
       },
-      Command::Sync { dump } => {
+      Command::Sync { ref dump } => {
         let _replica_mutex = self
           .replica_sync_mutex
           .lock()
@@ -106,7 +106,7 @@ impl App {
         let restore_result =
           self
             .replicator
-            .restore(self.storage.clone(), dump.clone(), self.last_replica_id);
+            .restore(self.storage.clone(), dump.to_vec(), self.last_replica_id);
 
         info!(
           "Reader replica ID before: {:?} + applied until: {:?}",

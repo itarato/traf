@@ -35,7 +35,7 @@ impl FrameAndChannel {
 }
 
 pub trait Executor {
-  fn execute(&mut self, command: &Command) -> ResponseFrame;
+  fn execute(&mut self, command: Command) -> ResponseFrame;
 }
 
 // IDEA: (BIG) distributed layout

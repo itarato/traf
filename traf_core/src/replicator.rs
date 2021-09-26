@@ -280,7 +280,7 @@ impl Replicator {
           match storage
             .lock()
             .expect("Failed gaining storage lock")
-            .execute(&chunk.command)
+            .execute(chunk.command.clone())
           {
             ResponseFrame::Success => {
               result.last_event_id = Some(chunk.number);

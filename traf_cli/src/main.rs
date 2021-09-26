@@ -59,9 +59,9 @@ async fn main() -> io::Result<()> {
             ResponseFrame::ErrorInvalidCommand => println!("[invalid command]"),
             ResponseFrame::ValueMissing => println!("[value missing]"),
             ResponseFrame::Value(v) => {
-              match String::from_utf8(v.clone()) {
+              match String::from_utf8(v) {
                 Ok(s) => println!("{:?}", s),
-                Err(_) => println!("{:?}", v),
+                Err(e) => println!("{:?}", e),
               };
             }
           },

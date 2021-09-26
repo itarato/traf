@@ -62,11 +62,11 @@ impl TryInto<Vec<u8>> for Command {
     let mut bytes: Vec<u8> = vec![];
 
     match self {
-      Command::Set { key, value } => {
+      Command::Set { key, mut value } => {
         bytes.append(&mut Vec::from(&b"SET "[..]));
         bytes.append(&mut Vec::from(&key[..]));
         bytes.push(b' ');
-        bytes.append(&mut value.clone());
+        bytes.append(&mut value);
       }
       Command::Delete { key } => {
         bytes.append(&mut Vec::from(&b"DELETE "[..]));
