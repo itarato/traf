@@ -12,8 +12,7 @@ impl Into<Vec<u8>> for ResponseFrame {
     match self {
       ResponseFrame::Success => vec![0],
       ResponseFrame::ErrorInvalidCommand => vec![1],
-      ResponseFrame::Value(v) => {
-        let mut v = v.clone();
+      ResponseFrame::Value(mut v) => {
         v.insert(0, 2);
         v
       }

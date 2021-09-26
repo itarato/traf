@@ -196,9 +196,9 @@ impl FileBackup {
             .entry(filehash)
             .or_insert(Changeset::default());
 
-          changeset.removals.insert(key.clone());
-          // It's fine if it's not in changeset updates, this is for just in case.
-          changeset.updates.remove(key.as_str());
+            // It's fine if it's not in changeset updates, this is for just in case.
+            changeset.updates.remove(key.as_str());
+            changeset.removals.insert(key.clone());
         }
         Command::Set { key, value } => {
           let filehash = self.shard_registry.filehash_for_key(key);
